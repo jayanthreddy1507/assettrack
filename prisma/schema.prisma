@@ -51,16 +51,17 @@ model User {
 }
 
 model Category {
-  id          String     @id @default(uuid())
-  name        String     @unique
+  id          String           @id @default(uuid())
+  name        String           @unique
   description String?
   icon        String?
-  parentId    String?    @map("parent_id")
-  createdAt   DateTime   @default(now()) @map("created_at")
-  updatedAt   DateTime   @updatedAt @map("updated_at")
+  parentId    String?          @map("parent_id")
+  status      DepartmentStatus @default(ACTIVE)
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
   assets      Asset[]
-  parent      Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
-  children    Category[] @relation("CategoryHierarchy")
+  parent      Category?        @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children    Category[]       @relation("CategoryHierarchy")
 
   @@index([parentId], map: "idx_categories_parent_id")
   @@map("categories")

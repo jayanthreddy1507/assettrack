@@ -2,16 +2,14 @@
 
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui";
+import { apiRequest } from "@/lib/api-client";
 import { AssetDetailsDrawer } from "./AssetDetailsDrawer";
 import { AssetFilters } from "./AssetFilters";
 import { AssetFormModal } from "./AssetFormModal";
 import { AssetIcon } from "./AssetIcons";
 import { AssetPagination } from "./AssetPagination";
 import { AssetTable } from "./AssetTable";
-import type {
-  AssetRecord,
-  AssetRegistryData,
-} from "./asset.types";
+import type { AssetRecord, AssetRegistryData } from "./asset.types";
 
 export interface AssetRegistryProps {
   data: AssetRegistryData;
@@ -26,11 +24,9 @@ export function AssetRegistry({ data }: AssetRegistryProps) {
   const [status, setStatus] = useState("");
   const [departmentId, setDepartmentId] = useState("");
   const [page, setPage] = useState(1);
-  const [selectedAsset, setSelectedAsset] =
-    useState<AssetRecord>();
+  const [selectedAsset, setSelectedAsset] = useState<AssetRecord>();
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [formAsset, setFormAsset] =
-    useState<AssetRecord>();
+  const [formAsset, setFormAsset] = useState<AssetRecord>();
   const [formOpen, setFormOpen] = useState(false);
 
   const filteredAssets = useMemo(() => {
@@ -43,48 +39,33 @@ export function AssetRegistry({ data }: AssetRegistryProps) {
         asset.name.toLowerCase().includes(normalizedQuery) ||
         asset.serialNumber?.toLowerCase().includes(normalizedQuery);
 
-      const matchesCategory =
-        !categoryId || asset.categoryId === categoryId;
+      const matchesCategory = !categoryId || asset.categoryId === categoryId;
 
-      const matchesStatus =
-        !status || asset.status === status;
+      const matchesStatus = !status || asset.status === status;
 
-      const matchesDepartment =
-        !departmentId || asset.departmentId === departmentId;
+      const matchesDepartment = !departmentId || asset.departmentId === departmentId;
 
-      return (
-        matchesQuery &&
-        matchesCategory &&
-        matchesStatus &&
-        matchesDepartment
-      );
+      return matchesQuery && matchesCategory && matchesStatus && matchesDepartment;
     });
   }, [assets, categoryId, departmentId, query, status]);
 
-  const totalPages = Math.max(
-    1,
-    Math.ceil(filteredAssets.length / PAGE_SIZE)
-  );
+  const totalPages = Math.max(1, Math.ceil(filteredAssets.length / PAGE_SIZE));
 
-  const paginatedAssets = filteredAssets.slice(
-    (page - 1) * PAGE_SIZE,
-    page * PAGE_SIZE
-  );
+  const paginatedAssets = filteredAssets.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-  function saveAsset(asset: AssetRecord) {
-    setAssets((current) => {
-      const exists = current.some((item) => item.id === asset.id);
-
-      return exists
-        ? current.map((item) =>
-            item.id === asset.id ? asset : item
-          )
-        : [asset, ...current];
-    });
-
-    setFormOpen(false);
-    setFormAsset(undefined);
-    setSelectedAsset(asset);
+  async function saveAsset(asset: AssetRecord) {
+    try {
+      const next = await apiRequest<AssetRegistryData>("/api/assets/registry", {
+        method: "POST",
+        body: JSON.stringify(asset),
+      });
+      setAssets(next.assets);
+      setFormOpen(false);
+      setFormAsset(undefined);
+      setSelectedAsset(next.assets.find((item) => item.assetTag === asset.assetTag));
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "Asset could not be saved.");
+    }
   }
 
   function openNewAsset() {
@@ -143,10 +124,7 @@ export function AssetRegistry({ data }: AssetRegistryProps) {
             }}
           />
 
-          <Button
-            leftIcon={<AssetIcon name="plus" size={16} />}
-            onClick={openNewAsset}
-          >
+          <Button leftIcon={<AssetIcon name="plus" size={16} />} onClick={openNewAsset}>
             Register Asset
           </Button>
         </div>

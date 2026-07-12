@@ -8,6 +8,6 @@ export * from "./DashboardTopbar";
 export * from "./OverdueReturnsTable";
 export * from "./QuickActions";
 export * from "./RecentActivityList";
-export * from "./dashboard.data";
+
 export * from "./dashboard.repository";
 export * from "./dashboard.types";

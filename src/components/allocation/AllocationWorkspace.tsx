@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { apiRequest } from "@/lib/api-client";
 import { AllocateAssetPanel } from "./AllocateAssetPanel";
 import { AllocationHistoryPanel } from "./AllocationHistoryPanel";
 import { AllocationTabs } from "./AllocationTabs";
@@ -8,114 +9,65 @@ import { ReturnAssetPanel } from "./ReturnAssetPanel";
 import { TransferRequestsPanel } from "./TransferRequestsPanel";
 import type {
   AllocationData,
-  AllocationHistoryItem,
   AllocationTab,
   ReturnRequest,
   TransferRequest,
   TransferStatus,
 } from "./allocation.types";
 
-export function AllocationWorkspace({
-  data,
-}: {
-  data: AllocationData;
-}) {
-  const [activeTab, setActiveTab] =
-    useState<AllocationTab>("allocate");
+export function AllocationWorkspace({ data }: { data: AllocationData }) {
+  const [activeTab, setActiveTab] = useState<AllocationTab>("allocate");
   const [assets, setAssets] = useState(data.assets);
   const [transfers, setTransfers] = useState(data.transfers);
   const [returns, setReturns] = useState(data.returns);
   const [history, setHistory] = useState(data.history);
 
+  function applyData(next: AllocationData) {
+    setAssets(next.assets);
+    setTransfers(next.transfers);
+    setReturns(next.returns);
+    setHistory(next.history);
+  }
+
+  async function mutate(body: unknown) {
+    try {
+      applyData(
+        await apiRequest<AllocationData>("/api/allocations", {
+          method: "POST",
+          body: JSON.stringify(body),
+        }),
+      );
+    } catch (error) {
+      window.alert(
+        error instanceof Error ? error.message : "Allocation could not be updated.",
+      );
+    }
+  }
+
   function addTransfer(transfer: TransferRequest) {
-    setTransfers((current) => [transfer, ...current]);
+    return mutate({
+      action: "createTransfer",
+      assetId: transfer.assetId,
+      toEmployeeId: transfer.toUserId,
+      reason: transfer.reason,
+    });
   }
 
-  function updateTransferStatus(
-    id: string,
-    status: TransferStatus
-  ) {
-    setTransfers((current) =>
-      current.map((item) =>
-        item.id === id ? { ...item, status } : item
-      )
-    );
+  function updateTransferStatus(id: string, status: TransferStatus) {
+    if (status !== "REQUESTED") void mutate({ action: "setTransferStatus", id, status });
   }
 
-  function allocateAsset(
-    assetId: string,
-    userId: string,
-    expectedReturn?: string
-  ) {
-    const person = data.people.find((item) => item.id === userId);
-    const asset = assets.find((item) => item.id === assetId);
-
-    if (!person || !asset) return;
-
-    setAssets((current) =>
-      current.map((item) =>
-        item.id === assetId
-          ? {
-              ...item,
-              status: "ASSIGNED",
-              currentHolderId: person.id,
-              currentHolderName: person.name,
-              currentHolderDepartment: person.departmentName,
-              allocatedSince: new Date().toLocaleDateString("en-IN"),
-              expectedReturn,
-            }
-          : item
-      )
-    );
-
-    const nextHistory: AllocationHistoryItem = {
-      id: `history-${Date.now()}`,
-      assetId,
-      assetTag: asset.assetTag,
-      assetName: asset.name,
-      action: "ALLOCATED",
-      description: `Allocated to ${person.name}${person.departmentName ? ` - ${person.departmentName}` : ""}`,
-      date: new Date().toLocaleDateString("en-IN", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-      }),
-    };
-
-    setHistory((current) => [nextHistory, ...current]);
+  function allocateAsset(assetId: string, userId: string, expectedReturn?: string) {
+    void mutate({ action: "allocate", assetId, employeeId: userId, expectedReturn });
   }
 
   function returnAsset(request: ReturnRequest) {
-    setReturns((current) => [request, ...current]);
-
-    setAssets((current) =>
-      current.map((item) =>
-        item.id === request.assetId
-          ? {
-              ...item,
-              status: "AVAILABLE",
-              currentHolderId: undefined,
-              currentHolderName: undefined,
-              currentHolderDepartment: undefined,
-              allocatedSince: undefined,
-              expectedReturn: undefined,
-            }
-          : item
-      )
-    );
-
-    setHistory((current) => [
-      {
-        id: `history-${Date.now()}`,
-        assetId: request.assetId,
-        assetTag: request.assetTag,
-        assetName: request.assetName,
-        action: "RETURNED",
-        description: `Returned by ${request.holderName} - condition: ${request.condition.toLowerCase()}`,
-        date: request.returnedOn,
-      },
-      ...current,
-    ]);
+    void mutate({
+      action: "return",
+      assetId: request.assetId,
+      condition: request.condition,
+      notes: request.notes,
+    });
   }
 
   return (
@@ -126,10 +78,7 @@ export function AllocationWorkspace({
       </header>
 
       <section className="allocation-workspace">
-        <AllocationTabs
-          activeTab={activeTab}
-          onChange={setActiveTab}
-        />
+        <AllocationTabs activeTab={activeTab} onChange={setActiveTab} />
 
         <div className="allocation-tab-panel">
           {activeTab === "allocate" && (
@@ -149,15 +98,10 @@ export function AllocationWorkspace({
           )}
 
           {activeTab === "return" && (
-            <ReturnAssetPanel
-              assets={assets}
-              onReturn={returnAsset}
-            />
+            <ReturnAssetPanel assets={assets} onReturn={returnAsset} />
           )}
 
-          {activeTab === "history" && (
-            <AllocationHistoryPanel history={history} />
-          )}
+          {activeTab === "history" && <AllocationHistoryPanel history={history} />}
         </div>
       </section>
     </div>

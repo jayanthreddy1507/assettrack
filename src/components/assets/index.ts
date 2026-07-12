@@ -6,6 +6,6 @@ export * from "./AssetPagination";
 export * from "./AssetRegistry";
 export * from "./AssetStatusBadge";
 export * from "./AssetTable";
-export * from "./asset.data";
+
 export * from "./asset.repository";
 export * from "./asset.types";

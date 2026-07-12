@@ -4,6 +4,6 @@ export * from "./MaintenanceRequestModal";
 export * from "./MaintenanceStatusBadge";
 export * from "./MaintenanceTable";
 export * from "./MaintenanceWorkspace";
-export * from "./maintenance.data";
+
 export * from "./maintenance.repository";
 export * from "./maintenance.types";
