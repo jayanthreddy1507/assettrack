@@ -45,7 +45,25 @@ async function post<TPayload>(path: string, payload: TPayload): Promise<AuthResp
     headers: { "Content-Type": "application/json", Accept: "application/json" },
     body: JSON.stringify(payload),
   });
-  return parseResponse(response);
+  const data = await parseResponse(response);
+
+  // Persist the token so the middleware cookie check works on next navigation.
+  const token =
+    data.accessToken || data.token || data.data?.accessToken || data.data?.token;
+  if (token && typeof document !== "undefined") {
+    const rememberMe = (payload as { rememberMe?: boolean }).rememberMe;
+    const maxAge = rememberMe ? 60 * 60 * 24 * 7 : undefined; // 7 days or session
+    document.cookie = [
+      `token=${token}`,
+      "path=/",
+      "SameSite=Lax",
+      maxAge !== undefined ? `max-age=${maxAge}` : "",
+    ]
+      .filter(Boolean)
+      .join("; ");
+  }
+
+  return data;
 }
 
 export function loginUser(payload: LoginPayload): Promise<AuthResponse> {
