@@ -3,7 +3,10 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Logo } from "@/components/ui";
-import { DashboardIcon, type DashboardIconName } from "./DashboardIcons";
+import {
+  DashboardIcon,
+  type DashboardIconName,
+} from "./DashboardIcons";
 
 interface NavigationItem {
   label: string;
@@ -21,6 +24,7 @@ const navigationItems: NavigationItem[] = [
   { label: "Reports", href: "/reports", icon: "reports" },
   { label: "Organization", href: "/organization", icon: "organization" },
   { label: "Notifications", href: "/notifications", icon: "notifications" },
+  { label: "Settings", href: "/settings", icon: "settings" },
 ];
 
 export function DashboardSidebar() {

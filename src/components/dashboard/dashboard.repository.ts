@@ -1,44 +1,18 @@
 import type { DashboardData } from "./dashboard.types";
 import { dummyDashboardData } from "./dashboard.data";
 
-import { cookies } from "next/headers";
-import { verifyToken } from "@/lib/jwt";
-import { prisma } from "@/lib/prisma";
-
 /**
  * Single dashboard data entry point.
+ *
+ * CURRENT:
+ * Returns local dummy data so the UI can be tested without a database.
+ *
+ * LATER, AFTER PRISMA IS CONNECTED:
+ * Replace the body of this function with Prisma queries. None of the
+ * dashboard components or the page needs to change.
  */
 export async function getDashboardData(): Promise<DashboardData> {
-  const cookieStore = await cookies();
-  const token = cookieStore.get("token")?.value;
-
-  if (!token) return dummyDashboardData;
-
-  const payload = verifyToken(token);
-  if (!payload?.sub) return dummyDashboardData;
-
-  const user = await prisma.user.findUnique({
-    where: { id: payload.sub },
-    include: {
-      employees: true,
-    },
-  });
-
-  if (!user) return dummyDashboardData;
-
-  const name =
-    user.name ||
-    (user.employees
-      ? `${user.employees.first_name} ${user.employees.last_name}`
-      : user.email);
-
-  return {
-    ...dummyDashboardData,
-    user: {
-      name,
-      role: user.role,
-    },
-  };
+  return dummyDashboardData;
 }
 
 /*
