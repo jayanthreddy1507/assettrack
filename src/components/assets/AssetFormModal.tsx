@@ -1,14 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import {
-  Button,
-  Checkbox,
-  Input,
-  Modal,
-  Select,
-  Textarea,
-} from "@/components/ui";
+import { useEffect, useState } from "react";
+import { Button, Checkbox, Input, Modal, Select, Textarea } from "@/components/ui";
 import type {
   AssetCategoryOption,
   AssetCondition,
@@ -26,6 +19,10 @@ export interface AssetFormModalProps {
   employees: EmployeeOption[];
   onClose: () => void;
   onSave: (asset: AssetRecord) => void;
+}
+
+function createAssetTag() {
+  return `AF-${String(Date.now()).slice(-4)}`;
 }
 
 const statusOptions: Array<{ label: string; value: AssetStatus }> = [
@@ -59,11 +56,6 @@ export function AssetFormModal({
   onClose,
   onSave,
 }: AssetFormModalProps) {
-  const generatedAssetTag = useMemo(
-    () => `AF-${String(Date.now()).slice(-4)}`,
-    [open]
-  );
-
   const [assetTag, setAssetTag] = useState("");
   const [name, setName] = useState("");
   const [serialNumber, setSerialNumber] = useState("");
@@ -84,7 +76,7 @@ export function AssetFormModal({
   const [error, setError] = useState("");
 
   useEffect(() => {
-    setAssetTag(asset?.assetTag ?? generatedAssetTag);
+    setAssetTag(asset?.assetTag ?? createAssetTag());
     setName(asset?.name ?? "");
     setSerialNumber(asset?.serialNumber ?? "");
     setDescription(asset?.description ?? "");
@@ -96,9 +88,7 @@ export function AssetFormModal({
     setAssignedToId(asset?.assignedToId ?? "");
     setAcquisitionDate(asset?.acquisitionDate ?? "");
     setAcquisitionCost(
-      asset?.acquisitionCost !== undefined
-        ? String(asset.acquisitionCost)
-        : ""
+      asset?.acquisitionCost !== undefined ? String(asset.acquisitionCost) : "",
     );
     setManufacturer(asset?.manufacturer ?? "");
     setModel(asset?.model ?? "");
@@ -106,7 +96,7 @@ export function AssetFormModal({
     setIsBookable(asset?.isBookable ?? false);
     setNotes(asset?.notes ?? "");
     setError("");
-  }, [asset, generatedAssetTag, open]);
+  }, [asset, open]);
 
   function handleSave() {
     if (!name.trim()) {
@@ -139,9 +129,7 @@ export function AssetFormModal({
       assignedToId: assignedToId || undefined,
       assignedToName: employee?.name,
       acquisitionDate: acquisitionDate || undefined,
-      acquisitionCost: acquisitionCost
-        ? Number(acquisitionCost)
-        : undefined,
+      acquisitionCost: acquisitionCost ? Number(acquisitionCost) : undefined,
       manufacturer: manufacturer.trim() || undefined,
       model: model.trim() || undefined,
       warrantyExpiry: warrantyExpiry || undefined,
@@ -217,9 +205,7 @@ export function AssetFormModal({
           label="Status"
           value={status}
           options={statusOptions}
-          onChange={(event) =>
-            setStatus(event.target.value as AssetStatus)
-          }
+          onChange={(event) => setStatus(event.target.value as AssetStatus)}
         />
 
         <Select
@@ -227,9 +213,7 @@ export function AssetFormModal({
           label="Condition"
           value={condition}
           options={conditionOptions}
-          onChange={(event) =>
-            setCondition(event.target.value as AssetCondition)
-          }
+          onChange={(event) => setCondition(event.target.value as AssetCondition)}
         />
 
         <Input

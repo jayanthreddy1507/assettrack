@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui";
+import { apiRequest } from "@/lib/api-client";
 import { CategoriesTable } from "./CategoriesTable";
 import { CategoryFormModal } from "./CategoryFormModal";
 import { DepartmentFormModal } from "./DepartmentFormModal";
@@ -35,20 +36,11 @@ const tabActionLabels: Record<OrganizationTab, string> = {
   employees: "Add Employee",
 };
 
-export function OrganizationSetup({
-  data,
-}: OrganizationSetupProps) {
-  const [activeTab, setActiveTab] =
-    useState<OrganizationTab>("departments");
-  const [departments, setDepartments] = useState(
-    data.departments
-  );
-  const [categories, setCategories] = useState(
-    data.categories
-  );
-  const [employees, setEmployees] = useState(
-    data.employees
-  );
+export function OrganizationSetup({ data }: OrganizationSetupProps) {
+  const [activeTab, setActiveTab] = useState<OrganizationTab>("departments");
+  const [departments, setDepartments] = useState(data.departments);
+  const [categories, setCategories] = useState(data.categories);
+  const [employees, setEmployees] = useState(data.employees);
   const [modal, setModal] = useState<ModalState>(null);
 
   const recordCount = useMemo(() => {
@@ -67,88 +59,64 @@ export function OrganizationSetup({
     }
   }
 
+  function applyData(next: OrganizationData) {
+    setDepartments(next.departments);
+    setCategories(next.categories);
+    setEmployees(next.employees);
+  }
+
+  async function persist(body: unknown) {
+    try {
+      applyData(
+        await apiRequest<OrganizationData>("/api/organization", {
+          method: "POST",
+          body: JSON.stringify(body),
+        }),
+      );
+      setModal(null);
+    } catch (error) {
+      window.alert(
+        error instanceof Error ? error.message : "Organization could not be updated.",
+      );
+    }
+  }
+
   function saveDepartment(record: DepartmentRecord) {
-    setDepartments((current) => {
-      const exists = current.some((item) => item.id === record.id);
-      return exists
-        ? current.map((item) =>
-            item.id === record.id ? record : item
-          )
-        : [record, ...current];
-    });
-    setModal(null);
+    return persist({ kind: "department", ...record });
   }
 
   function saveCategory(record: CategoryRecord) {
-    setCategories((current) => {
-      const exists = current.some((item) => item.id === record.id);
-      return exists
-        ? current.map((item) =>
-            item.id === record.id ? record : item
-          )
-        : [record, ...current];
-    });
-    setModal(null);
+    return persist({ kind: "category", ...record });
   }
 
   function saveEmployee(record: EmployeeRecord) {
-    setEmployees((current) => {
-      const exists = current.some((item) => item.id === record.id);
-      return exists
-        ? current.map((item) =>
-            item.id === record.id ? record : item
-          )
-        : [record, ...current];
+    return persist({
+      kind: "employee",
+      ...record,
+      employeeId: record.employeeId ?? record.id,
     });
-    setModal(null);
   }
 
   function toggleDepartmentStatus(id: string) {
-    setDepartments((current) =>
-      current.map((item) =>
-        item.id === id
-          ? {
-              ...item,
-              status:
-                item.status === "Active"
-                  ? "Inactive"
-                  : "Active",
-            }
-          : item
-      )
-    );
+    const record = departments.find((item) => item.id === id);
+    if (record)
+      void persist({ kind: "departmentStatus", id, active: record.status !== "Active" });
   }
 
   function toggleCategoryStatus(id: string) {
-    setCategories((current) =>
-      current.map((item) =>
-        item.id === id
-          ? {
-              ...item,
-              status:
-                item.status === "Active"
-                  ? "Inactive"
-                  : "Active",
-            }
-          : item
-      )
-    );
+    const record = categories.find((item) => item.id === id);
+    if (record)
+      void persist({
+        kind: "categoryStatus",
+        id,
+        active: record.status !== "Active",
+      });
   }
 
   function toggleEmployeeStatus(id: string) {
-    setEmployees((current) =>
-      current.map((item) =>
-        item.id === id
-          ? {
-              ...item,
-              status:
-                item.status === "INACTIVE"
-                  ? "ACTIVE"
-                  : "INACTIVE",
-            }
-          : item
-      )
-    );
+    const record = employees.find((item) => item.id === id);
+    if (record)
+      void persist({ kind: "employeeStatus", id, active: record.status !== "ACTIVE" });
   }
 
   return (
@@ -167,17 +135,12 @@ export function OrganizationSetup({
       />
 
       <section className="organization-workspace">
-        <OrganizationTabs
-          activeTab={activeTab}
-          onChange={setActiveTab}
-        />
+        <OrganizationTabs activeTab={activeTab} onChange={setActiveTab} />
 
         <div className="organization-toolbar">
           <div>
             <strong>{recordCount} records</strong>
-            <span>
-              Changes made here update options used across AssetFlow.
-            </span>
+            <span>Changes made here update options used across AssetFlow.</span>
           </div>
 
           <Button
@@ -188,16 +151,11 @@ export function OrganizationSetup({
           </Button>
         </div>
 
-        <div
-          className="organization-tab-panel"
-          role="tabpanel"
-        >
+        <div className="organization-tab-panel" role="tabpanel">
           {activeTab === "departments" && (
             <DepartmentsTable
               departments={departments}
-              onEdit={(record) =>
-                setModal({ kind: "department", record })
-              }
+              onEdit={(record) => setModal({ kind: "department", record })}
               onToggleStatus={toggleDepartmentStatus}
             />
           )}
@@ -205,9 +163,7 @@ export function OrganizationSetup({
           {activeTab === "categories" && (
             <CategoriesTable
               categories={categories}
-              onEdit={(record) =>
-                setModal({ kind: "category", record })
-              }
+              onEdit={(record) => setModal({ kind: "category", record })}
               onToggleStatus={toggleCategoryStatus}
             />
           )}
@@ -215,9 +171,7 @@ export function OrganizationSetup({
           {activeTab === "employees" && (
             <EmployeesTable
               employees={employees}
-              onEdit={(record) =>
-                setModal({ kind: "employee", record })
-              }
+              onEdit={(record) => setModal({ kind: "employee", record })}
               onToggleStatus={toggleEmployeeStatus}
             />
           )}
@@ -226,11 +180,7 @@ export function OrganizationSetup({
 
       <DepartmentFormModal
         open={modal?.kind === "department"}
-        department={
-          modal?.kind === "department"
-            ? modal.record
-            : undefined
-        }
+        department={modal?.kind === "department" ? modal.record : undefined}
         departments={departments}
         employees={employees}
         onClose={() => setModal(null)}
@@ -239,11 +189,7 @@ export function OrganizationSetup({
 
       <CategoryFormModal
         open={modal?.kind === "category"}
-        category={
-          modal?.kind === "category"
-            ? modal.record
-            : undefined
-        }
+        category={modal?.kind === "category" ? modal.record : undefined}
         categories={categories}
         onClose={() => setModal(null)}
         onSave={saveCategory}
@@ -251,11 +197,7 @@ export function OrganizationSetup({
 
       <EmployeeFormModal
         open={modal?.kind === "employee"}
-        employee={
-          modal?.kind === "employee"
-            ? modal.record
-            : undefined
-        }
+        employee={modal?.kind === "employee" ? modal.record : undefined}
         departments={departments}
         onClose={() => setModal(null)}
         onSave={saveEmployee}
