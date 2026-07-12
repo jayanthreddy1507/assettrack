@@ -1,17 +1,27 @@
-// ─── GENERATOR ─────────────────────────────────────────────────────────────────
-// NOTE: In Prisma 7+, the datasource URL is configured in prisma.config.ts
-// not here. The datasource block below only declares the provider.
+// =============================================================================
+// AssetTrack — Full ERP Schema
+// Prisma 7 | PostgreSQL 17
+// =============================================================================
+// NOTE: In Prisma 7+, datasource URL lives in prisma.config.ts, not here.
 
 datasource db {
   provider = "postgresql"
 }
 
+// Primary generator — used by app code (Prisma 7 rust-free client)
 generator client {
   provider = "prisma-client"
   output   = "../src/generated/prisma"
 }
 
-// ─── ENUMS ─────────────────────────────────────────────────────────────────────
+// Legacy generator — required by Prisma Studio until it supports prisma-client
+generator legacyClient {
+  provider = "prisma-client-js"
+}
+
+// =============================================================================
+// ENUMS
+// =============================================================================
 
 enum Role {
   SUPER_ADMIN
@@ -23,22 +33,35 @@ enum Role {
 }
 
 enum AssetStatus {
-  ACTIVE
   AVAILABLE
-  ASSIGNED
+  ALLOCATED
   IN_MAINTENANCE
-  DECOMMISSIONED
+  RESERVED
+  RETIRED
   LOST
   STOLEN
-  RESERVED
 }
 
-enum MaintenanceStatus {
-  SCHEDULED
-  IN_PROGRESS
+enum AssetCondition {
+  NEW
+  GOOD
+  FAIR
+  POOR
+  DAMAGED
+}
+
+enum AllocationStatus {
+  ACTIVE
+  RETURNED
+  OVERDUE
+}
+
+enum TransferStatus {
+  PENDING
+  APPROVED
+  REJECTED
   COMPLETED
   CANCELLED
-  ON_HOLD
 }
 
 enum BookingStatus {
@@ -51,27 +74,27 @@ enum BookingStatus {
   OVERDUE
 }
 
-enum AuditStatus {
+enum MaintenanceStatus {
   PENDING
-  IN_PROGRESS
-  COMPLETED
-  DISCREPANCY
-  RESOLVED
-}
-
-enum TransferStatus {
-  REQUESTED
   APPROVED
-  COMPLETED
-  REJECTED
+  ASSIGNED
+  IN_PROGRESS
+  RESOLVED
   CANCELLED
 }
 
-enum Priority {
-  LOW
-  MEDIUM
-  HIGH
-  CRITICAL
+enum AuditCycleStatus {
+  PLANNED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum AuditResult {
+  FOUND
+  MISSING
+  DAMAGED
+  MISPLACED
 }
 
 enum EmployeeStatus {
@@ -82,123 +105,60 @@ enum EmployeeStatus {
   SUSPENDED
 }
 
-// ─── DEPARTMENTS ───────────────────────────────────────────────────────────────
-
-model Department {
-  id          String      @id @default(uuid())
-  name        String      @unique
-  code        String      @unique
-  description String?
-
-  parentId    String?     @map("parent_id")
-  parent      Department? @relation("DepartmentHierarchy", fields: [parentId], references: [id])
-  children    Department[] @relation("DepartmentHierarchy")
-
-  managerId   String?     @map("manager_id")
-  manager     User?       @relation("DepartmentManager", fields: [managerId], references: [id])
-
-  users       User[]      @relation("UserDepartment")
-  assets      Asset[]
-
-  createdAt   DateTime    @default(now()) @map("created_at")
-  updatedAt   DateTime    @updatedAt @map("updated_at")
-  deletedAt   DateTime?   @map("deleted_at")
-
-  @@index([parentId], map: "idx_departments_parent_id")
-  @@map("departments")
+enum DepartmentStatus {
+  ACTIVE
+  INACTIVE
 }
 
-// ─── USERS ─────────────────────────────────────────────────────────────────────
+enum NotificationType {
+  ALLOCATION
+  RETURN_DUE
+  MAINTENANCE
+  BOOKING
+  TRANSFER
+  AUDIT
+  SYSTEM
+}
 
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+// =============================================================================
+// MODULE 1 — AUTHENTICATION
+// Users · Roles · Sessions
+// =============================================================================
+
+/// System login account. Separate from Employee (business identity).
+/// One user ↔ one employee (1:1), but a user can exist without an employee record.
 model User {
-  id            String         @id @default(uuid())
-  name          String
-  email         String         @unique
-  password      String?
-  role          Role           @default(EMPLOYEE)
-  status        EmployeeStatus @default(ACTIVE)
-  avatar        String?
-  phone         String?
-  employeeId    String?        @unique @map("employee_id")
+  id         String  @id @default(uuid())
+  email      String  @unique
+  password   String? // null for OAuth-only accounts
+  role       Role    @default(EMPLOYEE)
+  isActive   Boolean @default(true) @map("is_active")
+  avatar     String?
 
-  departmentId  String?        @map("department_id")
-  department    Department?    @relation("UserDepartment", fields: [departmentId], references: [id])
+  // 1:1 to Employee
+  employee   Employee?
 
-  managedDepts  Department[]   @relation("DepartmentManager")
-  assignedAssets Asset[]       @relation("AssetAssignee")
+  // Auth.js tables
+  accounts   Account[]
+  sessions   Session[]
 
-  accounts      Account[]
-  sessions      Session[]
+  // Activity
+  activityLogs ActivityLog[]
 
-  createdAt     DateTime       @default(now()) @map("created_at")
-  updatedAt     DateTime       @updatedAt @map("updated_at")
-  deletedAt     DateTime?      @map("deleted_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt      @map("updated_at")
 
   @@index([email], map: "idx_users_email")
-  @@index([departmentId], map: "idx_users_department_id")
-  @@index([role], map: "idx_users_role")
+  @@index([role],  map: "idx_users_role")
   @@map("users")
 }
-
-// ─── CATEGORIES ────────────────────────────────────────────────────────────────
-
-model Category {
-  id          String      @id @default(uuid())
-  name        String      @unique
-  description String?
-  icon        String?
-
-  parentId    String?     @map("parent_id")
-  parent      Category?   @relation("CategoryHierarchy", fields: [parentId], references: [id])
-  children    Category[]  @relation("CategoryHierarchy")
-
-  assets      Asset[]
-
-  createdAt   DateTime    @default(now()) @map("created_at")
-  updatedAt   DateTime    @updatedAt @map("updated_at")
-  deletedAt   DateTime?   @map("deleted_at")
-
-  @@index([parentId], map: "idx_categories_parent_id")
-  @@map("categories")
-}
-
-// ─── ASSETS ────────────────────────────────────────────────────────────────────
-
-model Asset {
-  id             String      @id @default(uuid())
-  name           String
-  assetTag       String      @unique @map("asset_tag")
-  serialNumber   String?     @unique @map("serial_number")
-  description    String?
-  status         AssetStatus @default(AVAILABLE)
-  metadata       Json?
-  purchaseDate   DateTime?   @map("purchase_date")
-  purchasePrice  Decimal?    @map("purchase_price") @db.Decimal(12, 2)
-  warrantyExpiry DateTime?   @map("warranty_expiry")
-  location       String?
-
-  categoryId    String      @map("category_id")
-  category      Category    @relation(fields: [categoryId], references: [id])
-
-  departmentId  String?     @map("department_id")
-  department    Department? @relation(fields: [departmentId], references: [id])
-
-  assignedToId  String?     @map("assigned_to")
-  assignedTo    User?       @relation("AssetAssignee", fields: [assignedToId], references: [id])
-
-  createdAt     DateTime    @default(now()) @map("created_at")
-  updatedAt     DateTime    @updatedAt @map("updated_at")
-  deletedAt     DateTime?   @map("deleted_at")
-
-  @@index([status], map: "idx_assets_status")
-  @@index([categoryId], map: "idx_assets_category_id")
-  @@index([departmentId], map: "idx_assets_department_id")
-  @@index([assignedToId], map: "idx_assets_assigned_to")
-  @@index([assetTag], map: "idx_assets_tag")
-  @@map("assets")
-}
-
-// ─── AUTH.JS TABLES ───────────────────────────────────────────────────────────
 
 model Account {
   id                String  @id @default(uuid())
@@ -225,9 +185,12 @@ model Session {
   sessionToken String   @unique @map("session_token")
   userId       String   @map("user_id")
   expires      DateTime
+  ipAddress    String?  @map("ip_address")
+  userAgent    String?  @map("user_agent")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([userId], map: "idx_sessions_user_id")
   @@map("sessions")
 }
 
@@ -238,4 +201,472 @@ model VerificationToken {
 
   @@unique([identifier, token])
   @@map("verification_tokens")
+}
+
+// =============================================================================
+// MODULE 2 — ORGANIZATION
+// Departments · Employees · Asset Categories
+// =============================================================================
+
+/// Organizational unit. Supports hierarchy via parent_id.
+model Department {
+  id          String           @id @default(uuid())
+  name        String           @unique
+  code        String           @unique
+  description String?
+  location    String?
+  status      DepartmentStatus @default(ACTIVE)
+
+  // Self-referential hierarchy (e.g. Engineering > Backend Team)
+  parentId    String?      @map("parent_id")
+  parent      Department?  @relation("DeptHierarchy", fields: [parentId], references: [id])
+  children    Department[] @relation("DeptHierarchy")
+
+  // Department head (FK to Employee — set after employees are created)
+  headId      String?    @unique @map("head_id")
+  head        Employee?  @relation("DeptHead", fields: [headId], references: [id])
+
+  employees   Employee[]
+  assets      Asset[]
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt      @map("updated_at")
+
+  @@index([parentId], map: "idx_departments_parent_id")
+  @@map("departments")
+}
+
+/// Business identity of a person. Separate from User (auth).
+/// An employee stays in the system even after the user account is deactivated.
+model Employee {
+  id           String         @id @default(uuid())
+  employeeCode String         @unique @map("employee_code")
+  firstName    String         @map("first_name")
+  lastName     String         @map("last_name")
+  email        String         @unique
+  phone        String?
+  jobTitle     String?        @map("job_title")
+  status       EmployeeStatus @default(ACTIVE)
+  joinedAt     DateTime?      @map("joined_at")
+
+  // 1:1 with User
+  userId       String?  @unique @map("user_id")
+  user         User?    @relation(fields: [userId], references: [id])
+
+  // Department
+  departmentId String?     @map("department_id")
+  department   Department? @relation(fields: [departmentId], references: [id])
+
+  // Manager (self-referential)
+  managerId    String?    @map("manager_id")
+  manager      Employee?  @relation("EmployeeManager", fields: [managerId], references: [id])
+  reports      Employee[] @relation("EmployeeManager")
+
+  // Department head relation (back-reference)
+  headOfDept   Department? @relation("DeptHead")
+
+  // Activity relations
+  allocations          AssetAllocation[]    @relation("AllocatedTo")
+  allocationsCreated   AssetAllocation[]    @relation("AllocatedBy")
+  transfersFrom        TransferRequest[]    @relation("TransferFrom")
+  transfersTo          TransferRequest[]    @relation("TransferTo")
+  transfersApproved    TransferRequest[]    @relation("TransferApproved")
+  bookings             ResourceBooking[]
+  maintenanceReported  MaintenanceRequest[] @relation("MaintenanceReporter")
+  maintenanceApproved  MaintenanceRequest[] @relation("MaintenanceApprover")
+  maintenanceAssigned  MaintenanceRequest[] @relation("MaintenanceTechnician")
+  maintenanceResolved  MaintenanceRequest[] @relation("MaintenanceResolver")
+  auditAssignments     AuditAssignment[]
+  notifications        Notification[]
+
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt      @map("updated_at")
+
+  @@index([departmentId], map: "idx_employees_department_id")
+  @@index([userId],       map: "idx_employees_user_id")
+  @@index([managerId],    map: "idx_employees_manager_id")
+  @@map("employees")
+}
+
+/// Asset category with hierarchy (e.g. Electronics > Laptops > Gaming Laptops)
+model Category {
+  id          String  @id @default(uuid())
+  name        String  @unique
+  description String?
+  icon        String?
+
+  parentId    String?    @map("parent_id")
+  parent      Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children    Category[] @relation("CategoryHierarchy")
+
+  assets      Asset[]
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt      @map("updated_at")
+
+  @@index([parentId], map: "idx_categories_parent_id")
+  @@map("categories")
+}
+
+// =============================================================================
+// MODULE 3 — ASSETS
+// Assets · Documents · Status History
+// =============================================================================
+
+/// Core asset record. Intentionally rich to avoid future schema changes.
+/// is_bookable = true means this asset can be reserved via resource_bookings.
+model Asset {
+  id             String         @id @default(uuid())
+  assetTag       String         @unique @map("asset_tag")   // physical label / QR
+  name           String
+  description    String?
+  serialNumber   String?        @unique @map("serial_number")
+  barcode        String?        @unique
+  qrCode         String?        @unique @map("qr_code")
+
+  status         AssetStatus    @default(AVAILABLE)
+  condition      AssetCondition @default(GOOD)
+  isBookable     Boolean        @default(false) @map("is_bookable")
+
+  // Financials
+  purchaseDate   DateTime?      @map("purchase_date")
+  purchaseCost   Decimal?       @map("purchase_cost")   @db.Decimal(12, 2)
+  manufacturer   String?
+  vendor         String?
+  warrantyExpiry DateTime?      @map("warranty_expiry")
+  retirementDate DateTime?      @map("retirement_date")
+
+  // Location & ownership
+  location       String?
+  departmentId   String?        @map("department_id")
+  department     Department?    @relation(fields: [departmentId], references: [id])
+
+  categoryId     String         @map("category_id")
+  category       Category       @relation(fields: [categoryId], references: [id])
+
+  // Audit trail for who created/last modified
+  createdById    String?        @map("created_by")
+  updatedById    String?        @map("updated_by")
+
+  // Relations
+  documents       AssetDocument[]
+  statusHistory   AssetStatusHistory[]
+  allocations     AssetAllocation[]
+  transfersFrom   TransferRequest[]    @relation("TransferAssetFrom")
+  bookings        ResourceBooking[]
+  maintenanceReqs MaintenanceRequest[]
+  auditItems      AuditItem[]
+  activityLogs    ActivityLog[]
+
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt      @map("updated_at")
+  deletedAt  DateTime?                 @map("deleted_at")
+
+  @@index([status],       map: "idx_assets_status")
+  @@index([categoryId],   map: "idx_assets_category_id")
+  @@index([departmentId], map: "idx_assets_department_id")
+  @@index([isBookable],   map: "idx_assets_is_bookable")
+  @@map("assets")
+}
+
+/// Attached files: invoices, photos, warranty PDFs, manuals.
+model AssetDocument {
+  id         String  @id @default(uuid())
+  assetId    String  @map("asset_id")
+  name       String
+  url        String
+  type       String  // "invoice" | "warranty" | "photo" | "manual" | "other"
+  uploadedBy String? @map("uploaded_by")
+
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([assetId], map: "idx_asset_documents_asset_id")
+  @@map("asset_documents")
+}
+
+/// Immutable log of every status transition an asset goes through.
+/// Never overwrite — always insert a new row.
+model AssetStatusHistory {
+  id         String      @id @default(uuid())
+  assetId    String      @map("asset_id")
+  fromStatus AssetStatus? @map("from_status")
+  toStatus   AssetStatus  @map("to_status")
+  reason     String?
+  changedBy  String?     @map("changed_by")  // user id
+
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([assetId],   map: "idx_status_history_asset_id")
+  @@index([createdAt], map: "idx_status_history_created_at")
+  @@map("asset_status_history")
+}
+
+// =============================================================================
+// MODULE 4 — ALLOCATION
+// Allocations · Transfers
+// (Returns are handled via returned_at on AssetAllocation — no separate table)
+// =============================================================================
+
+/// Tracks who holds an asset and when. History is automatic — one row per allocation.
+/// To "return" an asset: set returned_at, condition, return_notes and status = RETURNED.
+model AssetAllocation {
+  id             String           @id @default(uuid())
+  assetId        String           @map("asset_id")
+  employeeId     String           @map("employee_id")
+  allocatedById  String?          @map("allocated_by")
+  status         AllocationStatus @default(ACTIVE)
+
+  allocatedAt    DateTime  @default(now()) @map("allocated_at")
+  expectedReturn DateTime? @map("expected_return")
+  returnedAt     DateTime? @map("returned_at")
+
+  // Return details (filled on return)
+  returnCondition AssetCondition? @map("return_condition")
+  returnNotes     String?         @map("return_notes")
+
+  notes   String?
+
+  asset       Asset    @relation(fields: [assetId], references: [id])
+  employee    Employee @relation("AllocatedTo",  fields: [employeeId],    references: [id])
+  allocatedBy Employee? @relation("AllocatedBy", fields: [allocatedById], references: [id])
+
+  @@index([assetId],    map: "idx_allocations_asset_id")
+  @@index([employeeId], map: "idx_allocations_employee_id")
+  @@index([status],     map: "idx_allocations_status")
+  @@map("asset_allocations")
+}
+
+/// Request to move an asset from one department/employee to another.
+model TransferRequest {
+  id          String         @id @default(uuid())
+  assetId     String         @map("asset_id")
+  fromId      String         @map("from_employee_id")
+  toId        String         @map("to_employee_id")
+  approvedById String?       @map("approved_by")
+  status      TransferStatus @default(PENDING)
+  reason      String?
+  notes       String?
+
+  requestedAt  DateTime  @default(now()) @map("requested_at")
+  approvedAt   DateTime? @map("approved_at")
+  completedAt  DateTime? @map("completed_at")
+
+  asset       Asset    @relation("TransferAssetFrom", fields: [assetId],     references: [id])
+  from        Employee @relation("TransferFrom",       fields: [fromId],      references: [id])
+  to          Employee @relation("TransferTo",         fields: [toId],        references: [id])
+  approvedBy  Employee? @relation("TransferApproved",  fields: [approvedById],references: [id])
+
+  @@index([assetId], map: "idx_transfers_asset_id")
+  @@index([status],  map: "idx_transfers_status")
+  @@map("transfer_requests")
+}
+
+// =============================================================================
+// MODULE 5 — BOOKINGS
+// ResourceBooking (assets with is_bookable = true are the "resources")
+// =============================================================================
+
+/// Reserve a bookable asset for a time window.
+/// Constraint: no two approved/active bookings for the same asset can overlap.
+model ResourceBooking {
+  id         String        @id @default(uuid())
+  assetId    String        @map("asset_id")
+  employeeId String        @map("employee_id")
+  purpose    String?
+  status     BookingStatus @default(PENDING)
+
+  startTime  DateTime @map("start_time")
+  endTime    DateTime @map("end_time")
+
+  approvedBy String?   @map("approved_by")
+  approvedAt DateTime? @map("approved_at")
+  notes      String?
+
+  asset    Asset    @relation(fields: [assetId],    references: [id])
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt      @map("updated_at")
+
+  @@index([assetId],    map: "idx_bookings_asset_id")
+  @@index([employeeId], map: "idx_bookings_employee_id")
+  @@index([startTime, endTime], map: "idx_bookings_time_range")
+  @@index([status],  map: "idx_bookings_status")
+  @@map("resource_bookings")
+}
+
+// =============================================================================
+// MODULE 6 — MAINTENANCE
+// Requests · Updates (work history)
+// =============================================================================
+
+/// A maintenance job raised against an asset.
+model MaintenanceRequest {
+  id          String            @id @default(uuid())
+  assetId     String            @map("asset_id")
+  reportedById String           @map("reported_by")
+  priority    Priority          @default(MEDIUM)
+  description String
+  status      MaintenanceStatus @default(PENDING)
+
+  approvedById  String?   @map("approved_by")
+  assignedToId  String?   @map("assigned_to")    // technician
+  resolvedById  String?   @map("resolved_by")
+  resolvedAt    DateTime? @map("resolved_at")
+  resolutionNote String?  @map("resolution_note")
+
+  scheduledDate DateTime? @map("scheduled_date")
+
+  asset        Asset    @relation(fields: [assetId],      references: [id])
+  reportedBy   Employee @relation("MaintenanceReporter",  fields: [reportedById],  references: [id])
+  approvedBy   Employee? @relation("MaintenanceApprover", fields: [approvedById],  references: [id])
+  assignedTo   Employee? @relation("MaintenanceTechnician",fields: [assignedToId], references: [id])
+  resolvedBy   Employee? @relation("MaintenanceResolver", fields: [resolvedById],  references: [id])
+
+  updates MaintenanceUpdate[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt      @map("updated_at")
+
+  @@index([assetId],  map: "idx_maintenance_asset_id")
+  @@index([status],   map: "idx_maintenance_status")
+  @@index([priority], map: "idx_maintenance_priority")
+  @@map("maintenance_requests")
+}
+
+/// Immutable work log entries on a maintenance request (status changes, notes).
+model MaintenanceUpdate {
+  id        String            @id @default(uuid())
+  requestId String            @map("request_id")
+  updatedBy String            @map("updated_by")  // user id
+  status    MaintenanceStatus
+  note      String?
+
+  request MaintenanceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([requestId], map: "idx_maintenance_updates_request_id")
+  @@map("maintenance_updates")
+}
+
+// =============================================================================
+// MODULE 7 — AUDIT
+// Audit Cycles · Assignments · Items
+// =============================================================================
+
+/// A periodic audit run for a department (e.g. "Engineering - July 2025").
+model AuditCycle {
+  id           String           @id @default(uuid())
+  title        String
+  departmentId String?          @map("department_id")
+  startDate    DateTime         @map("start_date")
+  endDate      DateTime         @map("end_date")
+  status       AuditCycleStatus @default(PLANNED)
+  createdBy    String?          @map("created_by")  // user id
+
+  assignments AuditAssignment[]
+  items       AuditItem[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt      @map("updated_at")
+
+  @@index([status], map: "idx_audit_cycles_status")
+  @@map("audit_cycles")
+}
+
+/// Which employee is responsible for auditing which assets in a cycle.
+model AuditAssignment {
+  id         String @id @default(uuid())
+  cycleId    String @map("cycle_id")
+  auditorId  String @map("auditor_id")
+
+  cycle   AuditCycle @relation(fields: [cycleId],   references: [id], onDelete: Cascade)
+  auditor Employee   @relation(fields: [auditorId], references: [id])
+
+  @@unique([cycleId, auditorId])
+  @@map("audit_assignments")
+}
+
+/// Result for a single asset within an audit cycle.
+model AuditItem {
+  id        String      @id @default(uuid())
+  cycleId   String      @map("cycle_id")
+  assetId   String      @map("asset_id")
+  auditorId String?     @map("auditor_id")  // user id
+  result    AuditResult?
+  remarks   String?
+
+  // What was expected vs found
+  expectedLocation String? @map("expected_location")
+  actualLocation   String? @map("actual_location")
+
+  auditedAt DateTime? @map("audited_at")
+
+  cycle AuditCycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  asset Asset      @relation(fields: [assetId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([cycleId],  map: "idx_audit_items_cycle_id")
+  @@index([assetId],  map: "idx_audit_items_asset_id")
+  @@map("audit_items")
+}
+
+// =============================================================================
+// MODULE 8 — NOTIFICATIONS
+// =============================================================================
+
+model Notification {
+  id         String           @id @default(uuid())
+  employeeId String           @map("employee_id")
+  title      String
+  message    String
+  type       NotificationType
+  isRead     Boolean          @default(false) @map("is_read")
+  link       String?          // optional deep-link URL in the app
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([employeeId, isRead], map: "idx_notifications_employee_read")
+  @@index([createdAt],          map: "idx_notifications_created_at")
+  @@map("notifications")
+}
+
+// =============================================================================
+// MODULE 9 — ACTIVITY LOG
+// The most important ERP table. Never delete rows.
+// Captures every action with old/new values for full audit trail.
+// =============================================================================
+
+model ActivityLog {
+  id         String  @id @default(uuid())
+  userId     String? @map("user_id")      // who performed the action
+  assetId    String? @map("asset_id")     // which asset (if applicable)
+  module     String                        // "ASSET" | "ALLOCATION" | "BOOKING" etc.
+  action     String                        // "CREATED" | "UPDATED" | "DELETED" | "ALLOCATED" etc.
+  entityId   String? @map("entity_id")    // id of the affected record
+  entityType String? @map("entity_type")  // table/model name
+  oldValue   Json?   @map("old_value")    // snapshot before change
+  newValue   Json?   @map("new_value")    // snapshot after change
+  ipAddress  String? @map("ip_address")
+  userAgent  String? @map("user_agent")
+  note       String?
+
+  user  User?  @relation(fields: [userId],  references: [id], onDelete: SetNull)
+  asset Asset? @relation(fields: [assetId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId],     map: "idx_activity_logs_user_id")
+  @@index([assetId],    map: "idx_activity_logs_asset_id")
+  @@index([module],     map: "idx_activity_logs_module")
+  @@index([createdAt],  map: "idx_activity_logs_created_at")
+  @@map("activity_logs")
 }
