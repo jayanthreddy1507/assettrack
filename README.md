@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # AssetFlow — Backend
 
 Enterprise asset and resource management. FastAPI + PostgreSQL.
@@ -245,7 +244,7 @@ git push -u origin feat/booking-calendar
 Open a PR. Have a teammate merge it. Do this from the first hour — a repo with
 40 commits from one account and 2 from everyone else is a visible fail, and it
 cannot be repaired at 4pm.
-=======
+
 # assettrack — Enterprise Asset & Resource Management System
 
 A modern ERP system for tracking company assets, maintenance, bookings, and audits.
@@ -507,4 +506,3 @@ const [updatedAsset, log] = await prisma.$transaction([
 
 **Prisma Client out of date after `git pull`**
 - Run `npx prisma generate` (or just `npm install` which triggers `postinstall`)
->>>>>>> c6048c620bdf4b4496d72eaff76465de1648d8cd
