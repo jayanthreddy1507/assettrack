@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # AssetFlow — Backend
 
 Enterprise asset and resource management. FastAPI + PostgreSQL.
@@ -69,13 +68,13 @@ demo-ready.
 
 All passwords: `Assetflow2026`
 
-| Role | Email | Why they matter in the demo |
-|---|---|---|
-| Admin | admin@assetflow.io | Owns org setup, roles, audit cycles |
-| Asset Manager | manager@assetflow.io | Allocates, approves maintenance |
-| Dept Head | head@assetflow.io | Holds the 09:00 booking on Room B2 |
-| Employee | priya@assetflow.io | **Holds AF-0114** |
-| Employee | raj@assetflow.io | **Try to give him AF-0114** |
+| Role          | Email                | Why they matter in the demo         |
+| ------------- | -------------------- | ----------------------------------- |
+| Admin         | admin@assetflow.io   | Owns org setup, roles, audit cycles |
+| Asset Manager | manager@assetflow.io | Allocates, approves maintenance     |
+| Dept Head     | head@assetflow.io    | Holds the 09:00 booking on Room B2  |
+| Employee      | priya@assetflow.io   | **Holds AF-0114**                   |
+| Employee      | raj@assetflow.io     | **Try to give him AF-0114**         |
 
 ---
 
@@ -150,15 +149,15 @@ stuck.
 `GET /api/reports/retirement-radar` scores every asset 0–100 from four things
 the database already knows:
 
-| Signal | Weight |
-|---|---|
-| Age against the category's expected life | 35 |
-| Maintenance requests in the last 12 months | 30 |
-| Last recorded condition | 20 |
-| Days idle since last use | 15 |
+| Signal                                     | Weight |
+| ------------------------------------------ | ------ |
+| Age against the category's expected life   | 35     |
+| Maintenance requests in the last 12 months | 30     |
+| Last recorded condition                    | 20     |
+| Days idle since last use                   | 15     |
 
 Nothing is modelled, inferred or guessed — every point lost traces to a row, and
-the API returns the sentences, so the UI explains *why*:
+the API returns the sentences, so the UI explains _why_:
 
 ```
 Epson EB-2250U Projector — 3/100 · RETIRE
@@ -188,18 +187,18 @@ auditor walking the floor scans instead of typing a tag.
 
 ## 5. API map
 
-| Screen in the brief | Endpoints |
-|---|---|
-| Login / Signup | `POST /api/auth/signup` · `/login` · `GET /me` |
-| Organization Setup | `/api/org/departments` · `/categories` · `/employees` · `PATCH /employees/{id}/role` |
-| Asset Registration | `POST /api/assets` · `GET /api/assets?q=&status=&category_id=` · `/{id}` · `/{id}/qr` · `/by-tag/{tag}` |
-| Allocation & Transfer | `POST /api/allocations` · `/{id}/return` · `/overdue` · `/transfers` · `/transfers/{id}/decide` |
-| Resource Booking | `POST /api/bookings` · `GET /availability/{id}` · `/{id}/cancel` · `/{id}/reschedule` |
-| Maintenance | `POST /api/maintenance` · `/{id}/decide` · `/{id}/advance` |
-| Audit | `POST /api/audits/cycles` · `/items/{id}/mark` · `/cycles/{id}/discrepancies` · `/cycles/{id}/close` |
-| Dashboard | `GET /api/dashboard` |
-| Reports | `/api/reports/retirement-radar` · `/utilization` · `/booking-heatmap` · `/export/{report}` |
-| Activity & Notifications | `GET /api/activity` · `/api/notifications` |
+| Screen in the brief      | Endpoints                                                                                               |
+| ------------------------ | ------------------------------------------------------------------------------------------------------- |
+| Login / Signup           | `POST /api/auth/signup` · `/login` · `GET /me`                                                          |
+| Organization Setup       | `/api/org/departments` · `/categories` · `/employees` · `PATCH /employees/{id}/role`                    |
+| Asset Registration       | `POST /api/assets` · `GET /api/assets?q=&status=&category_id=` · `/{id}` · `/{id}/qr` · `/by-tag/{tag}` |
+| Allocation & Transfer    | `POST /api/allocations` · `/{id}/return` · `/overdue` · `/transfers` · `/transfers/{id}/decide`         |
+| Resource Booking         | `POST /api/bookings` · `GET /availability/{id}` · `/{id}/cancel` · `/{id}/reschedule`                   |
+| Maintenance              | `POST /api/maintenance` · `/{id}/decide` · `/{id}/advance`                                              |
+| Audit                    | `POST /api/audits/cycles` · `/items/{id}/mark` · `/cycles/{id}/discrepancies` · `/cycles/{id}/close`    |
+| Dashboard                | `GET /api/dashboard`                                                                                    |
+| Reports                  | `/api/reports/retirement-radar` · `/utilization` · `/booking-heatmap` · `/export/{report}`              |
+| Activity & Notifications | `GET /api/activity` · `/api/notifications`                                                              |
 
 ---
 
@@ -207,24 +206,24 @@ auditor walking the floor scans instead of typing a tag.
 
 Judges ask "show me where you enforce X". Have these ready:
 
-| Rule | File |
-|---|---|
-| Signup can never mint an admin | `routers/auth.py` — `SignupIn` has **no role field** |
-| Only an admin changes roles | `routers/org.py` — `change_role`, the only place `.role =` is written |
-| Double allocation blocked | `db.py` (index) + `routers/allocations.py` (friendly 409) |
-| Overlapping booking rejected | `db.py` (EXCLUDE) + `routers/bookings.py` |
+| Rule                                 | File                                                                           |
+| ------------------------------------ | ------------------------------------------------------------------------------ |
+| Signup can never mint an admin       | `routers/auth.py` — `SignupIn` has **no role field**                           |
+| Only an admin changes roles          | `routers/org.py` — `change_role`, the only place `.role =` is written          |
+| Double allocation blocked            | `db.py` (index) + `routers/allocations.py` (friendly 409)                      |
+| Overlapping booking rejected         | `db.py` (EXCLUDE) + `routers/bookings.py`                                      |
 | Approval precedes maintenance status | `routers/maintenance.py` — the asset moves in `decide`, not in `raise_request` |
-| No illegal workflow jumps | `routers/maintenance.py` — the `NEXT` state map |
-| Everything is audited | `services.py` — `log()`, called on every mutation |
+| No illegal workflow jumps            | `routers/maintenance.py` — the `NEXT` state map                                |
+| Everything is audited                | `services.py` — `log()`, called on every mutation                              |
 
 ---
 
 ## 7. Demo script (4 minutes)
 
 1. Log in as **manager**. Dashboard shows an overdue return and a pending repair — it is already alive.
-2. Try to allocate **AF-0114** to Raj. Rejected — *"held by Priya Nair"* — with two spare laptops offered and a Transfer button. Click Transfer. Approve it. Watch the history write itself.
+2. Try to allocate **AF-0114** to Raj. Rejected — _"held by Priya Nair"_ — with two spare laptops offered and a Transfer button. Click Transfer. Approve it. Watch the history write itself.
 3. Book **Room B2**, 09:30–10:30 tomorrow. Rejected, with the next free windows and two other free rooms. Take 10:00–11:00 instead. Accepted.
-4. Raise a repair on the van. Note the asset does *not* change status. Approve it. *Now* it does.
+4. Raise a repair on the van. Note the asset does _not_ change status. Approve it. _Now_ it does.
 5. Open **Reports → Retirement Radar**. The six-year-old projector scores 3/100 and says exactly why.
 6. Show `/docs`. Show `\d bookings`. The rules are in the database, not in an if-statement.
 
@@ -245,7 +244,7 @@ git push -u origin feat/booking-calendar
 Open a PR. Have a teammate merge it. Do this from the first hour — a repo with
 40 commits from one account and 2 from everyone else is a visible fail, and it
 cannot be repaired at 4pm.
-=======
+
 # assettrack — Enterprise Asset & Resource Management System
 
 A modern ERP system for tracking company assets, maintenance, bookings, and audits.
@@ -258,11 +257,11 @@ A modern ERP system for tracking company assets, maintenance, bookings, and audi
 
 Make sure these are installed on your machine before starting:
 
-| Tool | Version | Install |
-|---|---|---|
-| Node.js | 18+ | [nodejs.org](https://nodejs.org) |
-| PostgreSQL | 14+ | [postgresql.org](https://www.postgresql.org/download/) |
-| npm | 9+ | Comes with Node.js |
+| Tool       | Version | Install                                                |
+| ---------- | ------- | ------------------------------------------------------ |
+| Node.js    | 18+     | [nodejs.org](https://nodejs.org)                       |
+| PostgreSQL | 14+     | [postgresql.org](https://www.postgresql.org/download/) |
+| npm        | 9+      | Comes with Node.js                                     |
 
 ---
 
@@ -340,12 +339,14 @@ npm run db:seed
 ```
 
 This populates the database with:
+
 - 5 default departments (IT, HR, Finance, Operations, Facilities)
 - 8 asset categories (Electronics, Furniture, Vehicles, etc.)
 - 1 admin user
 - 3 demo assets
 
 **Default login:**
+
 ```
 Email:    admin@assettrack.com
 Password: Admin@1234
@@ -363,14 +364,14 @@ Open [http://localhost:3000](http://localhost:3000)
 
 ## Database Commands
 
-| Command | What it does |
-|---|---|
-| `npm run db:migrate:dev` | Create and apply a new migration (development) |
-| `npm run db:migrate` | Apply pending migrations (production/staging) |
-| `npm run db:generate` | Regenerate Prisma Client after schema changes |
-| `npm run db:seed` | Seed the database with default data |
-| `npm run db:studio` | Open Prisma Studio (visual DB browser at localhost:5555) |
-| `npm run db:reset` | ⚠️ Drop + re-migrate + re-seed (dev only, destroys data) |
+| Command                  | What it does                                             |
+| ------------------------ | -------------------------------------------------------- |
+| `npm run db:migrate:dev` | Create and apply a new migration (development)           |
+| `npm run db:migrate`     | Apply pending migrations (production/staging)            |
+| `npm run db:generate`    | Regenerate Prisma Client after schema changes            |
+| `npm run db:seed`        | Seed the database with default data                      |
+| `npm run db:studio`      | Open Prisma Studio (visual DB browser at localhost:5555) |
+| `npm run db:reset`       | ⚠️ Drop + re-migrate + re-seed (dev only, destroys data) |
 
 ---
 
@@ -403,11 +404,11 @@ AssetTrack/
 
 The database state is shared through three committed files:
 
-| File | Purpose |
-|---|---|
-| `prisma/schema.prisma` | Defines all tables, columns, and relationships |
-| `prisma/migrations/` | Full SQL history of every database change |
-| `prisma/seed.js` | Default data every developer's database should have |
+| File                   | Purpose                                             |
+| ---------------------- | --------------------------------------------------- |
+| `prisma/schema.prisma` | Defines all tables, columns, and relationships      |
+| `prisma/migrations/`   | Full SQL history of every database change           |
+| `prisma/seed.js`       | Default data every developer's database should have |
 
 **When a teammate changes the schema and pushes:**
 
@@ -428,26 +429,26 @@ npm run db:reset   # drops everything, re-migrates, re-seeds
 
 ### Tables
 
-| Table | Description |
-|---|---|
-| `users` | All system users with roles and department assignments |
-| `departments` | Organizational structure, supports hierarchy (parent/child) |
-| `categories` | Asset categories, supports hierarchy (e.g. Electronics > Laptops) |
-| `assets` | All tracked assets with status, location, and JSONB metadata |
-| `accounts` | Auth.js OAuth accounts |
-| `sessions` | Auth.js user sessions |
-| `verification_tokens` | Auth.js email verification |
+| Table                 | Description                                                       |
+| --------------------- | ----------------------------------------------------------------- |
+| `users`               | All system users with roles and department assignments            |
+| `departments`         | Organizational structure, supports hierarchy (parent/child)       |
+| `categories`          | Asset categories, supports hierarchy (e.g. Electronics > Laptops) |
+| `assets`              | All tracked assets with status, location, and JSONB metadata      |
+| `accounts`            | Auth.js OAuth accounts                                            |
+| `sessions`            | Auth.js user sessions                                             |
+| `verification_tokens` | Auth.js email verification                                        |
 
 ### Roles
 
-| Role | Access |
-|---|---|
-| `SUPER_ADMIN` | Full system access |
-| `ADMIN` | Manage assets, users, departments |
-| `MANAGER` | Approve bookings, view reports |
-| `TECHNICIAN` | Handle maintenance |
-| `EMPLOYEE` | Book assets, view own assignments |
-| `AUDITOR` | Read-only audit access |
+| Role          | Access                            |
+| ------------- | --------------------------------- |
+| `SUPER_ADMIN` | Full system access                |
+| `ADMIN`       | Manage assets, users, departments |
+| `MANAGER`     | Approve bookings, view reports    |
+| `TECHNICIAN`  | Handle maintenance                |
+| `EMPLOYEE`    | Book assets, view own assignments |
+| `AUDITOR`     | Read-only audit access            |
 
 ---
 
@@ -456,7 +457,7 @@ npm run db:reset   # drops everything, re-migrates, re-seeds
 Import the singleton — never instantiate `PrismaClient` directly in your components or routes:
 
 ```js
-import { prisma } from '@/lib/prisma'
+import { prisma } from "@/lib/prisma";
 
 // Fetch all active assets with their category and department
 const assets = await prisma.asset.findMany({
@@ -464,22 +465,27 @@ const assets = await prisma.asset.findMany({
   include: {
     category: true,
     department: true,
-    assignedTo: { select: { id: true, name: true, email: true } }
+    assignedTo: { select: { id: true, name: true, email: true } },
   },
-  orderBy: { createdAt: 'desc' }
-})
+  orderBy: { createdAt: "desc" },
+});
 
 // Soft delete an asset (never hard delete in an ERP)
 await prisma.asset.update({
   where: { id: assetId },
-  data: { deletedAt: new Date() }
-})
+  data: { deletedAt: new Date() },
+});
 
 // Wrap multi-step operations in a transaction
 const [updatedAsset, log] = await prisma.$transaction([
-  prisma.asset.update({ where: { id }, data: { status: 'ASSIGNED', assignedToId: userId } }),
-  prisma.auditLog.create({ data: { assetId: id, action: 'ASSIGNED', performedById: currentUser } })
-])
+  prisma.asset.update({
+    where: { id },
+    data: { status: "ASSIGNED", assignedToId: userId },
+  }),
+  prisma.auditLog.create({
+    data: { assetId: id, action: "ASSIGNED", performedById: currentUser },
+  }),
+]);
 ```
 
 ---
@@ -496,15 +502,18 @@ const [updatedAsset, log] = await prisma.$transaction([
 ## Troubleshooting
 
 **`Can't reach database server`**
+
 - Verify PostgreSQL is running: check Services on Windows or `brew services list` on Mac
 - Double-check `DATABASE_URL` in your `.env`
 
 **`permission denied to create database`**
+
 - Run: `ALTER USER assettrack_user CREATEDB;` in psql as postgres superuser
 
 **`relation "X" does not exist`**
+
 - Run `npx prisma migrate dev` to apply missing migrations
 
 **Prisma Client out of date after `git pull`**
+
 - Run `npx prisma generate` (or just `npm install` which triggers `postinstall`)
->>>>>>> c6048c620bdf4b4496d72eaff76465de1648d8cd

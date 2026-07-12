@@ -9,8 +9,8 @@ export function AuthBrandPanel() {
           Enterprise Asset &amp; Resource Management System
         </h1>
         <p className="auth-brand-panel__description">
-          Track assets, manage allocations and keep every shared resource
-          visible from one simple workspace.
+          Track assets, manage allocations and keep every shared resource visible from one
+          simple workspace.
         </p>
       </div>
 

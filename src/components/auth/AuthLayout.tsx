@@ -20,7 +20,10 @@ export function AuthLayout({ children }: AuthLayoutProps) {
           </div>
           <div className="auth-feature-card">
             <strong>Secure role assignment</strong>
-            <p>New signups create employee accounts only. Administrators assign elevated roles later.</p>
+            <p>
+              New signups create employee accounts only. Administrators assign elevated
+              roles later.
+            </p>
           </div>
         </aside>
         <section className="auth-content">{children}</section>

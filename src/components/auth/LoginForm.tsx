@@ -41,28 +41,15 @@ export function LoginForm() {
       const response = await loginUser({
         email: email.trim().toLowerCase(),
         password,
+        rememberMe,
       });
-
-      const token =
-        response.accessToken ||
-        response.token ||
-        response.data?.accessToken ||
-        response.data?.token;
-
-      if (token && rememberMe) {
-        localStorage.setItem("assetflow_access_token", token);
-      } else if (token) {
-        sessionStorage.setItem("assetflow_access_token", token);
-      }
 
       router.replace(getRedirectPath(response));
       router.refresh();
     } catch (error) {
       setErrors({
         form:
-          error instanceof Error
-            ? error.message
-            : "Unable to sign in. Please try again.",
+          error instanceof Error ? error.message : "Unable to sign in. Please try again.",
       });
     } finally {
       setLoading(false);
@@ -127,8 +114,8 @@ export function LoginForm() {
       </div>
 
       <p className="auth-form__support-copy">
-        Sign up creates an employee account. Administrative roles are assigned
-        later by an administrator.
+        Sign up creates an employee account. Administrative roles are assigned later by an
+        administrator.
       </p>
 
       <Link href="/auth/signup" className="auth-outline-link">

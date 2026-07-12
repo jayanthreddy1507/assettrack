@@ -18,11 +18,7 @@ export function PasswordRules({ password }: PasswordRulesProps) {
   return (
     <div className="password-rules" aria-live="polite">
       {rules.map(([key, label]) => (
-        <div
-          key={key}
-          className="password-rule"
-          data-valid={checks[key]}
-        >
+        <div key={key} className="password-rule" data-valid={checks[key]}>
           <span className="password-rule__icon" aria-hidden="true">
             {checks[key] ? "✓" : "•"}
           </span>

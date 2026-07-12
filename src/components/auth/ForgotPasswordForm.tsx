@@ -26,13 +26,11 @@ export function ForgotPasswordForm() {
 
     try {
       const baseUrl = (
-        process.env.NEXT_PUBLIC_API_BASE_URL ??
-        "http://localhost:4000/api"
+        process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000/api"
       ).replace(/\/$/, "");
 
       const endpoint =
-        process.env.NEXT_PUBLIC_FORGOT_PASSWORD_ENDPOINT ??
-        "/auth/forgot-password";
+        process.env.NEXT_PUBLIC_FORGOT_PASSWORD_ENDPOINT ?? "/auth/forgot-password";
 
       const response = await fetch(`${baseUrl}${endpoint}`, {
         method: "POST",
@@ -48,14 +46,13 @@ export function ForgotPasswordForm() {
       }
 
       setMessage(
-        data.message ||
-          "Password reset instructions have been sent to your email."
+        data.message || "Password reset instructions have been sent to your email.",
       );
     } catch (requestError) {
       setError(
         requestError instanceof Error
           ? requestError.message
-          : "Unable to send reset instructions."
+          : "Unable to send reset instructions.",
       );
     } finally {
       setLoading(false);

@@ -25,23 +25,29 @@ export function Table<T extends object>({
         <table className="ui-table">
           <thead>
             <tr>
-              {columns.map((column) => <th key={String(column.key)}>{column.header}</th>)}
+              {columns.map((column) => (
+                <th key={String(column.key)}>{column.header}</th>
+              ))}
             </tr>
           </thead>
           <tbody>
-            {rows.length ? rows.map((row) => (
-              <tr key={getRowKey(row)}>
-                {columns.map((column) => (
-                  <td key={String(column.key)}>
-                    {column.render
-                      ? column.render(row)
-                      : String((row as Record<string, unknown>)[String(column.key)] ?? "—")}
-                  </td>
-                ))}
-              </tr>
-            )) : (
+            {rows.length ? (
+              rows.map((row) => (
+                <tr key={getRowKey(row)}>
+                  {columns.map((column) => (
+                    <td key={String(column.key)}>
+                      {column.render
+                        ? column.render(row)
+                        : String(
+                            (row as Record<string, unknown>)[String(column.key)] ?? "—",
+                          )}
+                    </td>
+                  ))}
+                </tr>
+              ))
+            ) : (
               <tr>
-                <td colSpan={columns.length} className="text-center text-muted">
+                <td colSpan={columns.length} className="text-muted text-center">
                   {emptyMessage}
                 </td>
               </tr>

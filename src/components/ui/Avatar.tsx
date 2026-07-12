@@ -1,4 +1,5 @@
 import type { HTMLAttributes } from "react";
+import Image from "next/image";
 import { cn } from "@/utils/cn";
 
 type AvatarSize = "sm" | "md" | "lg";
@@ -19,7 +20,7 @@ export function Avatar({ name, src, size = "md", className, ...props }: AvatarPr
 
   return (
     <span className={cn("ui-avatar", `ui-avatar--${size}`, className)} {...props}>
-      {src ? <img src={src} alt={name} /> : initials}
+      {src ? <Image src={src} alt={name} width={48} height={48} /> : initials}
     </span>
   );
 }

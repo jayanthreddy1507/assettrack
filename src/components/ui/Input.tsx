@@ -23,7 +23,11 @@ export function Input({
 }: InputProps) {
   return (
     <div className={cn("form-field", className)}>
-      {label && <FormLabel htmlFor={id} required={required}>{label}</FormLabel>}
+      {label && (
+        <FormLabel htmlFor={id} required={required}>
+          {label}
+        </FormLabel>
+      )}
       <div className={cn("input-shell", error && "input-shell--error")}>
         {leftIcon}
         <input id={id} required={required} aria-invalid={Boolean(error)} {...props} />

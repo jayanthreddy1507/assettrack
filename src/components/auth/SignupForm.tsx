@@ -45,15 +45,11 @@ export function SignupForm() {
     event.preventDefault();
 
     const nextErrors: SignupErrors = {
-      name: values.name.trim().length < 2
-        ? "Enter your full name."
-        : "",
+      name: values.name.trim().length < 2 ? "Enter your full name." : "",
       email: validateEmail(values.email),
       password: validatePassword(values.password),
       confirmPassword:
-        values.confirmPassword !== values.password
-          ? "Passwords do not match."
-          : "",
+        values.confirmPassword !== values.password ? "Passwords do not match." : "",
     };
 
     if (
@@ -159,9 +155,7 @@ export function SignupForm() {
         value={values.confirmPassword}
         error={errors.confirmPassword}
         required
-        onChange={(event) =>
-          updateField("confirmPassword", event.target.value)
-        }
+        onChange={(event) => updateField("confirmPassword", event.target.value)}
       />
 
       <Button type="submit" fullWidth loading={loading}>

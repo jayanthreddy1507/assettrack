@@ -10,12 +10,7 @@ export interface StatCardProps {
   tone?: StatTone;
 }
 
-export function StatCard({
-  label,
-  value,
-  meta,
-  tone = "mint",
-}: StatCardProps) {
+export function StatCard({ label, value, meta, tone = "mint" }: StatCardProps) {
   return (
     <article className={cn("stat-card", `stat-card--${tone}`)}>
       <div className="stat-card__label">{label}</div>
