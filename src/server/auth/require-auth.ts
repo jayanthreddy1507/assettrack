@@ -2,7 +2,6 @@ import "server-only";
 
 import type { NextRequest } from "next/server";
 
-import { auth } from "@/auth";
 import { ApiError } from "@/lib/api-error";
 import { extractBearerToken, verifyToken } from "@/lib/jwt";
 import { hasRole, type Role } from "@/server/auth/permissions";
@@ -23,17 +22,6 @@ function tokenFromRequest(request: NextRequest) {
 }
 
 export async function getCurrentUser(request: NextRequest): Promise<CurrentUser | null> {
-  const session = await auth().catch(() => null);
-
-  if (session?.user?.id && session.user.email) {
-    return {
-      id: session.user.id,
-      email: session.user.email,
-      role: session.user.role as Role,
-      name: session.user.name,
-    };
-  }
-
   const token = tokenFromRequest(request);
   const payload = token ? verifyToken(token) : null;
 
