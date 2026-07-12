@@ -8,9 +8,19 @@ export interface AlertProps extends HTMLAttributes<HTMLDivElement> {
   icon?: ReactNode;
 }
 
-export function Alert({ tone = "info", icon, className, children, ...props }: AlertProps) {
+export function Alert({
+  tone = "info",
+  icon,
+  className,
+  children,
+  ...props
+}: AlertProps) {
   return (
-    <div className={cn("ui-alert", `ui-alert--${tone}`, className)} role="alert" {...props}>
+    <div
+      className={cn("ui-alert", `ui-alert--${tone}`, className)}
+      role="alert"
+      {...props}
+    >
       {icon}
       <div>{children}</div>
     </div>

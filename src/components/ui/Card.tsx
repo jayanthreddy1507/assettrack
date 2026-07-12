@@ -18,7 +18,7 @@ export function Card({
         "ui-card",
         padded && "ui-card--padded",
         interactive && "ui-card--interactive",
-        className
+        className,
       )}
       {...props}
     />

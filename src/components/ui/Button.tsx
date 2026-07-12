@@ -33,7 +33,7 @@ export function Button({
         `ui-button--${variant}`,
         size !== "md" && `ui-button--${size}`,
         fullWidth && "ui-button--full",
-        className
+        className,
       )}
       disabled={disabled || loading}
       {...props}

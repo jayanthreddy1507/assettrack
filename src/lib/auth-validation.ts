@@ -39,7 +39,5 @@ export function validatePassword(password: string): string {
   if (!checks.digit) missing.push("one digit");
   if (!checks.specialCharacter) missing.push("one special character");
 
-  return missing.length
-    ? `Password must contain ${missing.join(", ")}.`
-    : "";
+  return missing.length ? `Password must contain ${missing.join(", ")}.` : "";
 }

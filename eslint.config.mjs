@@ -1,16 +1,27 @@
-import { defineConfig, globalIgnores } from "eslint/config";
-import nextVitals from "eslint-config-next/core-web-vitals";
+import { FlatCompat } from "@eslint/eslintrc";
+import { globalIgnores } from "eslint/config";
+import prettier from "eslint-config-prettier";
+import { dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const eslintConfig = defineConfig([
-  ...nextVitals,
-  // Override default ignores of eslint-config-next.
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+const compat = new FlatCompat({
+  baseDirectory: __dirname,
+});
+
+const eslintConfig = [
+  ...compat.extends("next/core-web-vitals"),
+  prettier,
   globalIgnores([
-    // Default ignores of eslint-config-next:
     ".next/**",
     "out/**",
     "build/**",
+    "coverage/**",
+    "src/generated/prisma/**",
     "next-env.d.ts",
   ]),
-]);
+];
 
 export default eslintConfig;

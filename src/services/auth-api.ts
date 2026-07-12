@@ -1,30 +1,30 @@
+/**
+ * Auth API service
+ *
+ * Calls the Next.js API routes under /api/auth/*.
+ * The base URL defaults to an empty string so requests go to the same origin.
+ * Set NEXT_PUBLIC_API_BASE_URL in .env only if you proxy to a different host.
+ */
+
 import type {
   ApiErrorResponse,
   AuthResponse,
   LoginPayload,
   RegisterPayload,
-} from "@/types/auth.ts";
+} from "@/types/auth";
 
-const API_BASE_URL = (
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000/api"
-).replace(/\/$/, "");
-
-const LOGIN_ENDPOINT =
-  process.env.NEXT_PUBLIC_LOGIN_ENDPOINT ?? "/auth/login";
-
-const REGISTER_ENDPOINT =
-  process.env.NEXT_PUBLIC_REGISTER_ENDPOINT ?? "/auth/register";
+// Default to same-origin (empty string) so /api/auth/login resolves correctly.
+const API_BASE_URL = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
 
 async function parseResponse(response: Response): Promise<AuthResponse> {
   const data = (await response.json().catch(() => ({}))) as
-    | AuthResponse
-    | ApiErrorResponse;
+    AuthResponse | ApiErrorResponse;
 
   if (!response.ok) {
     const errorData = data as ApiErrorResponse;
     const fieldError = errorData.errors
       ? Object.values(errorData.errors)
-          .flatMap((value) => (Array.isArray(value) ? value : [value]))
+          .flatMap((v) => (Array.isArray(v) ? v : [v]))
           .filter(Boolean)[0]
       : undefined;
 
@@ -32,47 +32,30 @@ async function parseResponse(response: Response): Promise<AuthResponse> {
       fieldError ||
         errorData.message ||
         errorData.error ||
-        `Request failed with status ${response.status}.`
+        `Request failed (${response.status}).`,
     );
   }
 
   return data as AuthResponse;
 }
 
-async function post<TPayload>(
-  endpoint: string,
-  payload: TPayload
-): Promise<AuthResponse> {
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+async function post<TPayload>(path: string, payload: TPayload): Promise<AuthResponse> {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
     method: "POST",
-    credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    },
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
     body: JSON.stringify(payload),
   });
-
   return parseResponse(response);
 }
 
 export function loginUser(payload: LoginPayload): Promise<AuthResponse> {
-  return post(LOGIN_ENDPOINT, payload);
+  return post("/api/auth/login", payload);
 }
 
-export function registerUser(
-  payload: RegisterPayload
-): Promise<AuthResponse> {
-  return post(REGISTER_ENDPOINT, payload);
+export function registerUser(payload: RegisterPayload): Promise<AuthResponse> {
+  return post("/api/auth/register", payload);
 }
 
-export function getRedirectPath(
-  response: AuthResponse,
-  fallback = "/dashboard"
-): string {
-  return (
-    response.redirectTo ||
-    response.data?.redirectTo ||
-    fallback
-  );
+export function getRedirectPath(response: AuthResponse, fallback = "/dashboard"): string {
+  return response.redirectTo || response.data?.redirectTo || fallback;
 }

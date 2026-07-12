@@ -7,11 +7,7 @@ export interface AuthCardProps {
   children: ReactNode;
 }
 
-export function AuthCard({
-  title,
-  subtitle,
-  children,
-}: AuthCardProps) {
+export function AuthCard({ title, subtitle, children }: AuthCardProps) {
   return (
     <div className="auth-card fade-in">
       <div className="auth-card__mobile-logo">

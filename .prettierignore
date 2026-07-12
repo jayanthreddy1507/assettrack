@@ -1,0 +1,9 @@
+.next
+node_modules
+coverage
+dist
+build
+out
+src/generated/prisma
+package-lock.json
+*.tsbuildinfo

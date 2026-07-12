@@ -1,17 +1,404 @@
-// ─── GENERATOR ─────────────────────────────────────────────────────────────────
-// NOTE: In Prisma 7+, the datasource URL is configured in prisma.config.ts
-// not here. The datasource block below only declares the provider.
-
-datasource db {
-  provider = "postgresql"
-}
-
 generator client {
   provider = "prisma-client"
   output   = "../src/generated/prisma"
 }
 
-// ─── ENUMS ─────────────────────────────────────────────────────────────────────
+datasource db {
+  provider = "postgresql"
+}
+
+model Department {
+  id                                             String           @id @default(uuid())
+  name                                           String           @unique
+  code                                           String           @unique
+  description                                    String?
+  location                                       String?
+  status                                         DepartmentStatus @default(ACTIVE)
+  parentId                                       String?          @map("parent_id")
+  head_id                                        String?          @unique
+  createdAt                                      DateTime         @default(now()) @map("created_at")
+  updatedAt                                      DateTime         @updatedAt @map("updated_at")
+  assets                                         Asset[]
+  employees_departments_head_idToemployees       employees?       @relation("departments_head_idToemployees", fields: [head_id], references: [id])
+  parent                                         Department?      @relation("DepartmentHierarchy", fields: [parentId], references: [id])
+  children                                       Department[]     @relation("DepartmentHierarchy")
+  employees_employees_department_idTodepartments employees[]      @relation("employees_department_idTodepartments")
+
+  @@index([parentId], map: "idx_departments_parent_id")
+  @@map("departments")
+}
+
+model User {
+  id            String          @id @default(uuid())
+  name          String?
+  email         String          @unique
+  emailVerified DateTime?       @map("email_verified")
+  image         String?
+  password      String?
+  role          Role            @default(EMPLOYEE)
+  is_active     Boolean         @default(true)
+  avatar        String?
+  createdAt     DateTime        @default(now()) @map("created_at")
+  updatedAt     DateTime        @updatedAt @map("updated_at")
+  accounts      Account[]
+  activity_logs activity_logs[]
+  employees     employees?
+  sessions      Session[]
+
+  @@index([email], map: "idx_users_email")
+  @@index([role], map: "idx_users_role")
+  @@map("users")
+}
+
+model Category {
+  id          String     @id @default(uuid())
+  name        String     @unique
+  description String?
+  icon        String?
+  parentId    String?    @map("parent_id")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+  assets      Asset[]
+  parent      Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children    Category[] @relation("CategoryHierarchy")
+
+  @@index([parentId], map: "idx_categories_parent_id")
+  @@map("categories")
+}
+
+model Asset {
+  id                   String                 @id @default(uuid())
+  assetTag             String                 @unique @map("asset_tag")
+  name                 String
+  description          String?
+  serialNumber         String?                @unique @map("serial_number")
+  barcode              String?                @unique
+  qr_code              String?                @unique
+  status               AssetStatus            @default(AVAILABLE)
+  condition            AssetCondition         @default(GOOD)
+  is_bookable          Boolean                @default(false)
+  purchaseDate         DateTime?              @map("purchase_date")
+  purchase_cost        Decimal?               @db.Decimal(12, 2)
+  manufacturer         String?
+  vendor               String?
+  warrantyExpiry       DateTime?              @map("warranty_expiry")
+  retirement_date      DateTime?
+  location             String?
+  departmentId         String?                @map("department_id")
+  categoryId           String                 @map("category_id")
+  created_by           String?
+  updated_by           String?
+  createdAt            DateTime               @default(now()) @map("created_at")
+  updatedAt            DateTime               @updatedAt @map("updated_at")
+  deletedAt            DateTime?              @map("deleted_at")
+  activity_logs        activity_logs[]
+  asset_allocations    asset_allocations[]
+  asset_documents      asset_documents[]
+  asset_status_history asset_status_history[]
+  category             Category               @relation(fields: [categoryId], references: [id])
+  department           Department?            @relation(fields: [departmentId], references: [id])
+  audit_items          audit_items[]
+  maintenance_requests maintenance_requests[]
+  resource_bookings    resource_bookings[]
+  transfer_requests    transfer_requests[]
+
+  @@index([status], map: "idx_assets_status")
+  @@index([categoryId], map: "idx_assets_category_id")
+  @@index([departmentId], map: "idx_assets_department_id")
+  @@index([is_bookable], map: "idx_assets_is_bookable")
+  @@map("assets")
+}
+
+model Account {
+  id                String  @id @default(uuid())
+  userId            String  @map("user_id")
+  type              String
+  provider          String
+  providerAccountId String  @map("provider_account_id")
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  sessionToken String   @unique @map("session_token")
+  userId       String   @map("user_id")
+  expires      DateTime
+  ip_address   String?
+  user_agent   String?
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId], map: "idx_sessions_user_id")
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+model activity_logs {
+  id          String   @id
+  user_id     String?
+  asset_id    String?
+  module      String
+  action      String
+  entity_id   String?
+  entity_type String?
+  old_value   Json?
+  new_value   Json?
+  ip_address  String?
+  user_agent  String?
+  note        String?
+  created_at  DateTime @default(now())
+  assets      Asset?   @relation(fields: [asset_id], references: [id])
+  users       User?    @relation(fields: [user_id], references: [id])
+
+  @@index([asset_id], map: "idx_activity_logs_asset_id")
+  @@index([created_at], map: "idx_activity_logs_created_at")
+  @@index([module], map: "idx_activity_logs_module")
+  @@index([user_id], map: "idx_activity_logs_user_id")
+}
+
+model asset_allocations {
+  id                                                  String           @id
+  asset_id                                            String
+  employee_id                                         String
+  allocated_by                                        String?
+  status                                              AllocationStatus @default(ACTIVE)
+  allocated_at                                        DateTime         @default(now())
+  expected_return                                     DateTime?
+  returned_at                                         DateTime?
+  return_condition                                    AssetCondition?
+  return_notes                                        String?
+  notes                                               String?
+  employees_asset_allocations_allocated_byToemployees employees?       @relation("asset_allocations_allocated_byToemployees", fields: [allocated_by], references: [id])
+  assets                                              Asset            @relation(fields: [asset_id], references: [id])
+  employees_asset_allocations_employee_idToemployees  employees        @relation("asset_allocations_employee_idToemployees", fields: [employee_id], references: [id])
+
+  @@index([asset_id], map: "idx_allocations_asset_id")
+  @@index([employee_id], map: "idx_allocations_employee_id")
+  @@index([status], map: "idx_allocations_status")
+}
+
+model asset_documents {
+  id          String   @id
+  asset_id    String
+  name        String
+  url         String
+  type        String
+  uploaded_by String?
+  created_at  DateTime @default(now())
+  assets      Asset    @relation(fields: [asset_id], references: [id], onDelete: Cascade)
+
+  @@index([asset_id], map: "idx_asset_documents_asset_id")
+}
+
+model asset_status_history {
+  id          String       @id
+  asset_id    String
+  from_status AssetStatus?
+  to_status   AssetStatus
+  reason      String?
+  changed_by  String?
+  created_at  DateTime     @default(now())
+  assets      Asset        @relation(fields: [asset_id], references: [id], onDelete: Cascade)
+
+  @@index([asset_id], map: "idx_status_history_asset_id")
+  @@index([created_at], map: "idx_status_history_created_at")
+}
+
+model audit_assignments {
+  id           String       @id
+  cycle_id     String
+  auditor_id   String
+  employees    employees    @relation(fields: [auditor_id], references: [id])
+  audit_cycles audit_cycles @relation(fields: [cycle_id], references: [id], onDelete: Cascade)
+
+  @@unique([cycle_id, auditor_id])
+}
+
+model audit_cycles {
+  id                String              @id
+  title             String
+  department_id     String?
+  start_date        DateTime
+  end_date          DateTime
+  status            AuditCycleStatus    @default(PLANNED)
+  created_by        String?
+  created_at        DateTime            @default(now())
+  updated_at        DateTime
+  audit_assignments audit_assignments[]
+  audit_items       audit_items[]
+
+  @@index([status], map: "idx_audit_cycles_status")
+}
+
+model audit_items {
+  id                String       @id
+  cycle_id          String
+  asset_id          String
+  auditor_id        String?
+  result            AuditResult?
+  remarks           String?
+  expected_location String?
+  actual_location   String?
+  audited_at        DateTime?
+  created_at        DateTime     @default(now())
+  assets            Asset        @relation(fields: [asset_id], references: [id])
+  audit_cycles      audit_cycles @relation(fields: [cycle_id], references: [id], onDelete: Cascade)
+
+  @@index([asset_id], map: "idx_audit_items_asset_id")
+  @@index([cycle_id], map: "idx_audit_items_cycle_id")
+}
+
+model employees {
+  id                                                               String                 @id @default(uuid())
+  employee_code                                                    String                 @unique
+  first_name                                                       String
+  last_name                                                        String
+  email                                                            String                 @unique
+  phone                                                            String?
+  job_title                                                        String?
+  status                                                           EmployeeStatus         @default(ACTIVE)
+  joined_at                                                        DateTime?
+  user_id                                                          String?                @unique
+  department_id                                                    String?
+  manager_id                                                       String?
+  created_at                                                       DateTime               @default(now())
+  updated_at                                                       DateTime               @updatedAt
+  asset_allocations_asset_allocations_allocated_byToemployees      asset_allocations[]    @relation("asset_allocations_allocated_byToemployees")
+  asset_allocations_asset_allocations_employee_idToemployees       asset_allocations[]    @relation("asset_allocations_employee_idToemployees")
+  audit_assignments                                                audit_assignments[]
+  departments_departments_head_idToemployees                       Department?            @relation("departments_head_idToemployees")
+  departments_employees_department_idTodepartments                 Department?            @relation("employees_department_idTodepartments", fields: [department_id], references: [id])
+  employees                                                        employees?             @relation("employeesToemployees", fields: [manager_id], references: [id])
+  other_employees                                                  employees[]            @relation("employeesToemployees")
+  users                                                            User?                  @relation(fields: [user_id], references: [id])
+  maintenance_requests_maintenance_requests_approved_byToemployees maintenance_requests[] @relation("maintenance_requests_approved_byToemployees")
+  maintenance_requests_maintenance_requests_assigned_toToemployees maintenance_requests[] @relation("maintenance_requests_assigned_toToemployees")
+  maintenance_requests_maintenance_requests_reported_byToemployees maintenance_requests[] @relation("maintenance_requests_reported_byToemployees")
+  maintenance_requests_maintenance_requests_resolved_byToemployees maintenance_requests[] @relation("maintenance_requests_resolved_byToemployees")
+  notifications                                                    notifications[]
+  resource_bookings                                                resource_bookings[]
+  transfer_requests_transfer_requests_approved_byToemployees       transfer_requests[]    @relation("transfer_requests_approved_byToemployees")
+  transfer_requests_transfer_requests_from_employee_idToemployees  transfer_requests[]    @relation("transfer_requests_from_employee_idToemployees")
+  transfer_requests_transfer_requests_to_employee_idToemployees    transfer_requests[]    @relation("transfer_requests_to_employee_idToemployees")
+
+  @@index([department_id], map: "idx_employees_department_id")
+  @@index([manager_id], map: "idx_employees_manager_id")
+  @@index([user_id], map: "idx_employees_user_id")
+}
+
+model maintenance_requests {
+  id                                                    String                @id
+  asset_id                                              String
+  reported_by                                           String
+  priority                                              Priority              @default(MEDIUM)
+  description                                           String
+  status                                                MaintenanceStatus     @default(PENDING)
+  approved_by                                           String?
+  assigned_to                                           String?
+  resolved_by                                           String?
+  resolved_at                                           DateTime?
+  resolution_note                                       String?
+  scheduled_date                                        DateTime?
+  created_at                                            DateTime              @default(now())
+  updated_at                                            DateTime
+  employees_maintenance_requests_approved_byToemployees employees?            @relation("maintenance_requests_approved_byToemployees", fields: [approved_by], references: [id])
+  assets                                                Asset                 @relation(fields: [asset_id], references: [id])
+  employees_maintenance_requests_assigned_toToemployees employees?            @relation("maintenance_requests_assigned_toToemployees", fields: [assigned_to], references: [id])
+  employees_maintenance_requests_reported_byToemployees employees             @relation("maintenance_requests_reported_byToemployees", fields: [reported_by], references: [id])
+  employees_maintenance_requests_resolved_byToemployees employees?            @relation("maintenance_requests_resolved_byToemployees", fields: [resolved_by], references: [id])
+  maintenance_updates                                   maintenance_updates[]
+
+  @@index([asset_id], map: "idx_maintenance_asset_id")
+  @@index([priority], map: "idx_maintenance_priority")
+  @@index([status], map: "idx_maintenance_status")
+}
+
+model maintenance_updates {
+  id                   String               @id
+  request_id           String
+  updated_by           String
+  status               MaintenanceStatus
+  note                 String?
+  created_at           DateTime             @default(now())
+  maintenance_requests maintenance_requests @relation(fields: [request_id], references: [id], onDelete: Cascade)
+
+  @@index([request_id], map: "idx_maintenance_updates_request_id")
+}
+
+model notifications {
+  id          String           @id
+  employee_id String
+  title       String
+  message     String
+  type        NotificationType
+  is_read     Boolean          @default(false)
+  link        String?
+  created_at  DateTime         @default(now())
+  employees   employees        @relation(fields: [employee_id], references: [id], onDelete: Cascade)
+
+  @@index([created_at], map: "idx_notifications_created_at")
+  @@index([employee_id, is_read], map: "idx_notifications_employee_read")
+}
+
+model resource_bookings {
+  id          String        @id
+  asset_id    String
+  employee_id String
+  purpose     String?
+  status      BookingStatus @default(PENDING)
+  start_time  DateTime
+  end_time    DateTime
+  approved_by String?
+  approved_at DateTime?
+  notes       String?
+  created_at  DateTime      @default(now())
+  updated_at  DateTime
+  assets      Asset         @relation(fields: [asset_id], references: [id])
+  employees   employees     @relation(fields: [employee_id], references: [id])
+
+  @@index([asset_id], map: "idx_bookings_asset_id")
+  @@index([employee_id], map: "idx_bookings_employee_id")
+  @@index([status], map: "idx_bookings_status")
+  @@index([start_time, end_time], map: "idx_bookings_time_range")
+}
+
+model transfer_requests {
+  id                                                      String         @id
+  asset_id                                                String
+  from_employee_id                                        String
+  to_employee_id                                          String
+  approved_by                                             String?
+  status                                                  TransferStatus @default(PENDING)
+  reason                                                  String?
+  notes                                                   String?
+  requested_at                                            DateTime       @default(now())
+  approved_at                                             DateTime?
+  completed_at                                            DateTime?
+  employees_transfer_requests_approved_byToemployees      employees?     @relation("transfer_requests_approved_byToemployees", fields: [approved_by], references: [id])
+  assets                                                  Asset          @relation(fields: [asset_id], references: [id])
+  employees_transfer_requests_from_employee_idToemployees employees      @relation("transfer_requests_from_employee_idToemployees", fields: [from_employee_id], references: [id])
+  employees_transfer_requests_to_employee_idToemployees   employees      @relation("transfer_requests_to_employee_idToemployees", fields: [to_employee_id], references: [id])
+
+  @@index([asset_id], map: "idx_transfers_asset_id")
+  @@index([status], map: "idx_transfers_status")
+}
 
 enum Role {
   SUPER_ADMIN
@@ -23,22 +410,22 @@ enum Role {
 }
 
 enum AssetStatus {
-  ACTIVE
   AVAILABLE
-  ASSIGNED
+  ALLOCATED
   IN_MAINTENANCE
-  DECOMMISSIONED
+  RESERVED
+  RETIRED
   LOST
   STOLEN
-  RESERVED
 }
 
 enum MaintenanceStatus {
-  SCHEDULED
+  PENDING
+  APPROVED
+  ASSIGNED
   IN_PROGRESS
-  COMPLETED
+  RESOLVED
   CANCELLED
-  ON_HOLD
 }
 
 enum BookingStatus {
@@ -51,19 +438,11 @@ enum BookingStatus {
   OVERDUE
 }
 
-enum AuditStatus {
-  PENDING
-  IN_PROGRESS
-  COMPLETED
-  DISCREPANCY
-  RESOLVED
-}
-
 enum TransferStatus {
-  REQUESTED
+  PENDING
   APPROVED
-  COMPLETED
   REJECTED
+  COMPLETED
   CANCELLED
 }
 
@@ -82,160 +461,45 @@ enum EmployeeStatus {
   SUSPENDED
 }
 
-// ─── DEPARTMENTS ───────────────────────────────────────────────────────────────
-
-model Department {
-  id          String      @id @default(uuid())
-  name        String      @unique
-  code        String      @unique
-  description String?
-
-  parentId    String?     @map("parent_id")
-  parent      Department? @relation("DepartmentHierarchy", fields: [parentId], references: [id])
-  children    Department[] @relation("DepartmentHierarchy")
-
-  managerId   String?     @map("manager_id")
-  manager     User?       @relation("DepartmentManager", fields: [managerId], references: [id])
-
-  users       User[]      @relation("UserDepartment")
-  assets      Asset[]
-
-  createdAt   DateTime    @default(now()) @map("created_at")
-  updatedAt   DateTime    @updatedAt @map("updated_at")
-  deletedAt   DateTime?   @map("deleted_at")
-
-  @@index([parentId], map: "idx_departments_parent_id")
-  @@map("departments")
+enum AllocationStatus {
+  ACTIVE
+  RETURNED
+  OVERDUE
 }
 
-// ─── USERS ─────────────────────────────────────────────────────────────────────
-
-model User {
-  id            String         @id @default(uuid())
-  name          String
-  email         String         @unique
-  password      String?
-  role          Role           @default(EMPLOYEE)
-  status        EmployeeStatus @default(ACTIVE)
-  avatar        String?
-  phone         String?
-  employeeId    String?        @unique @map("employee_id")
-
-  departmentId  String?        @map("department_id")
-  department    Department?    @relation("UserDepartment", fields: [departmentId], references: [id])
-
-  managedDepts  Department[]   @relation("DepartmentManager")
-  assignedAssets Asset[]       @relation("AssetAssignee")
-
-  accounts      Account[]
-  sessions      Session[]
-
-  createdAt     DateTime       @default(now()) @map("created_at")
-  updatedAt     DateTime       @updatedAt @map("updated_at")
-  deletedAt     DateTime?      @map("deleted_at")
-
-  @@index([email], map: "idx_users_email")
-  @@index([departmentId], map: "idx_users_department_id")
-  @@index([role], map: "idx_users_role")
-  @@map("users")
+enum AssetCondition {
+  NEW
+  GOOD
+  FAIR
+  POOR
+  DAMAGED
 }
 
-// ─── CATEGORIES ────────────────────────────────────────────────────────────────
-
-model Category {
-  id          String      @id @default(uuid())
-  name        String      @unique
-  description String?
-  icon        String?
-
-  parentId    String?     @map("parent_id")
-  parent      Category?   @relation("CategoryHierarchy", fields: [parentId], references: [id])
-  children    Category[]  @relation("CategoryHierarchy")
-
-  assets      Asset[]
-
-  createdAt   DateTime    @default(now()) @map("created_at")
-  updatedAt   DateTime    @updatedAt @map("updated_at")
-  deletedAt   DateTime?   @map("deleted_at")
-
-  @@index([parentId], map: "idx_categories_parent_id")
-  @@map("categories")
+enum AuditCycleStatus {
+  PLANNED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
 }
 
-// ─── ASSETS ────────────────────────────────────────────────────────────────────
-
-model Asset {
-  id             String      @id @default(uuid())
-  name           String
-  assetTag       String      @unique @map("asset_tag")
-  serialNumber   String?     @unique @map("serial_number")
-  description    String?
-  status         AssetStatus @default(AVAILABLE)
-  metadata       Json?
-  purchaseDate   DateTime?   @map("purchase_date")
-  purchasePrice  Decimal?    @map("purchase_price") @db.Decimal(12, 2)
-  warrantyExpiry DateTime?   @map("warranty_expiry")
-  location       String?
-
-  categoryId    String      @map("category_id")
-  category      Category    @relation(fields: [categoryId], references: [id])
-
-  departmentId  String?     @map("department_id")
-  department    Department? @relation(fields: [departmentId], references: [id])
-
-  assignedToId  String?     @map("assigned_to")
-  assignedTo    User?       @relation("AssetAssignee", fields: [assignedToId], references: [id])
-
-  createdAt     DateTime    @default(now()) @map("created_at")
-  updatedAt     DateTime    @updatedAt @map("updated_at")
-  deletedAt     DateTime?   @map("deleted_at")
-
-  @@index([status], map: "idx_assets_status")
-  @@index([categoryId], map: "idx_assets_category_id")
-  @@index([departmentId], map: "idx_assets_department_id")
-  @@index([assignedToId], map: "idx_assets_assigned_to")
-  @@index([assetTag], map: "idx_assets_tag")
-  @@map("assets")
+enum AuditResult {
+  FOUND
+  MISSING
+  DAMAGED
+  MISPLACED
 }
 
-// ─── AUTH.JS TABLES ───────────────────────────────────────────────────────────
-
-model Account {
-  id                String  @id @default(uuid())
-  userId            String  @map("user_id")
-  type              String
-  provider          String
-  providerAccountId String  @map("provider_account_id")
-  refresh_token     String?
-  access_token      String?
-  expires_at        Int?
-  token_type        String?
-  scope             String?
-  id_token          String?
-  session_state     String?
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([provider, providerAccountId])
-  @@map("accounts")
+enum DepartmentStatus {
+  ACTIVE
+  INACTIVE
 }
 
-model Session {
-  id           String   @id @default(uuid())
-  sessionToken String   @unique @map("session_token")
-  userId       String   @map("user_id")
-  expires      DateTime
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("sessions")
-}
-
-model VerificationToken {
-  identifier String
-  token      String   @unique
-  expires    DateTime
-
-  @@unique([identifier, token])
-  @@map("verification_tokens")
+enum NotificationType {
+  ALLOCATION
+  RETURN_DUE
+  MAINTENANCE
+  BOOKING
+  TRANSFER
+  AUDIT
+  SYSTEM
 }

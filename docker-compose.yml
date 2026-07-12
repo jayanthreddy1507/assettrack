@@ -1,0 +1,61 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: assetflow-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-assetflow}
+      POSTGRES_USER: ${POSTGRES_USER:-assetflow_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-assetflow_password}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-assetflow_user} -d ${POSTGRES_DB:-assetflow}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: assetflow-app
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      NODE_ENV: production
+      APP_NAME: ${APP_NAME:-AssetFlow}
+      APP_URL: ${APP_URL:-http://localhost:3000}
+      AUTH_SECRET: ${AUTH_SECRET}
+      AUTH_URL: ${AUTH_URL:-http://localhost:3000}
+      AUTH_TRUST_HOST: ${AUTH_TRUST_HOST:-true}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-assetflow_user}:${POSTGRES_PASSWORD:-assetflow_password}@postgres:5432/${POSTGRES_DB:-assetflow}?schema=public
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    ports:
+      - "3000:3000"
+
+  migrate:
+    image: node:22-alpine
+    container_name: assetflow-migrate
+    working_dir: /app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-assetflow_user}:${POSTGRES_PASSWORD:-assetflow_password}@postgres:5432/${POSTGRES_DB:-assetflow}?schema=public
+    volumes:
+      - .:/app
+    command: sh -c "npm ci && npm run db:migrate"
+
+volumes:
+  postgres-data:
