@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui";
+import { apiRequest } from "@/lib/api-client";
 import { MaintenanceIcon } from "./MaintenanceIcons";
 import { MaintenanceKanban } from "./MaintenanceKanban";
 import { MaintenanceRequestModal } from "./MaintenanceRequestModal";
@@ -19,54 +20,39 @@ const nextStatus: Partial<Record<MaintenanceStatus, MaintenanceStatus>> = {
   IN_PROGRESS: "RESOLVED",
 };
 
-export function MaintenanceWorkspace({
-  data,
-}: {
-  data: MaintenanceData;
-}) {
+export function MaintenanceWorkspace({ data }: { data: MaintenanceData }) {
   const [requests, setRequests] = useState(data.requests);
   const [view, setView] = useState<"table" | "kanban">("kanban");
   const [modalOpen, setModalOpen] = useState(false);
 
+  async function mutate(body: unknown) {
+    try {
+      const next = await apiRequest<MaintenanceData>("/api/maintenance", {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+      setRequests(next.requests);
+      setModalOpen(false);
+    } catch (error) {
+      window.alert(
+        error instanceof Error ? error.message : "Maintenance could not be updated.",
+      );
+    }
+  }
+
   function addRequest(request: MaintenanceRequest) {
-    setRequests((current) => [request, ...current]);
-    setModalOpen(false);
+    return mutate({
+      action: "create",
+      assetId: request.assetId,
+      issue: request.issue,
+      description: request.description,
+      priority: request.priority,
+    });
   }
 
   function advanceRequest(id: string) {
-    setRequests((current) =>
-      current.map((request) => {
-        if (request.id !== id) return request;
-
-        const status = nextStatus[request.status];
-        if (!status) return request;
-
-        return {
-          ...request,
-          status,
-          approvedBy:
-            status !== "APPROVED"
-              ? request.approvedBy
-              : "Asset Manager",
-          technicianId:
-            status === "TECHNICIAN_ASSIGNED"
-              ? data.technicians[0]?.id
-              : request.technicianId,
-          technicianName:
-            status === "TECHNICIAN_ASSIGNED"
-              ? data.technicians[0]?.name
-              : request.technicianName,
-          resolvedOn:
-            status === "RESOLVED"
-              ? new Date().toLocaleDateString("en-IN", {
-                  day: "2-digit",
-                  month: "short",
-                  year: "numeric",
-                })
-              : request.resolvedOn,
-        };
-      })
-    );
+    const request = requests.find((item) => item.id === id);
+    if (request && nextStatus[request.status]) void mutate({ action: "advance", id });
   }
 
   return (
@@ -116,8 +102,8 @@ export function MaintenanceWorkspace({
         )}
 
         <div className="maintenance-workflow-note">
-          Approving a request moves the asset to under maintenance.
-          Resolving it returns the asset to available.
+          Approving a request moves the asset to under maintenance. Resolving it returns
+          the asset to available.
         </div>
       </section>
 

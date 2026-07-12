@@ -1,12 +1,7 @@
 import type { DashboardUser } from "@/components/dashboard";
 
 export type BookingStatus =
-  | "UPCOMING"
-  | "ONGOING"
-  | "COMPLETED"
-  | "CANCELLED"
-  | "PENDING"
-  | "OVERLAPPING";
+  "UPCOMING" | "ONGOING" | "COMPLETED" | "CANCELLED" | "PENDING" | "OVERLAPPING";
 
 export interface BookingResource {
   id: string;
@@ -34,4 +29,5 @@ export interface BookingData {
   user: DashboardUser;
   resources: BookingResource[];
   bookings: ResourceBooking[];
+  defaultDate: string;
 }

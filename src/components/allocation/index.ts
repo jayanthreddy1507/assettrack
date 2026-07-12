@@ -6,6 +6,6 @@ export * from "./AllocationTabs";
 export * from "./AllocationWorkspace";
 export * from "./ReturnAssetPanel";
 export * from "./TransferRequestsPanel";
-export * from "./allocation.data";
+
 export * from "./allocation.repository";
 export * from "./allocation.types";

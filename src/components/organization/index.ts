@@ -9,6 +9,6 @@ export * from "./OrganizationIcons";
 export * from "./OrganizationSetup";
 export * from "./OrganizationSummary";
 export * from "./OrganizationTabs";
-export * from "./organization.data";
+
 export * from "./organization.repository";
 export * from "./organization.types";

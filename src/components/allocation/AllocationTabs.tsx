@@ -17,14 +17,12 @@ const tabs: Array<{
   { id: "history", label: "Allocation History", icon: "history" },
 ];
 
-export function AllocationTabs({
-  activeTab,
-  onChange,
-}: AllocationTabsProps) {
+export function AllocationTabs({ activeTab, onChange }: AllocationTabsProps) {
   return (
     <div className="allocation-tabs" role="tablist">
       {tabs.map((tab) => (
         <button
+          role="tab"
           key={tab.id}
           type="button"
           className="allocation-tab"

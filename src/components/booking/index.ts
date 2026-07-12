@@ -5,6 +5,6 @@ export * from "./BookingLegend";
 export * from "./BookingWorkspace";
 export * from "./MiniCalendar";
 export * from "./ResourceSelector";
-export * from "./booking.data";
+
 export * from "./booking.repository";
 export * from "./booking.types";

@@ -2,38 +2,45 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui";
+import { apiRequest } from "@/lib/api-client";
 import { BookingCalendar } from "./BookingCalendar";
 import { BookingFormModal } from "./BookingFormModal";
 import { BookingIcon } from "./BookingIcons";
 import { BookingLegend } from "./BookingLegend";
 import { MiniCalendar } from "./MiniCalendar";
 import { ResourceSelector } from "./ResourceSelector";
-import type {
-  BookingData,
-  ResourceBooking,
-} from "./booking.types";
+import type { BookingData, ResourceBooking } from "./booking.types";
 
-export function BookingWorkspace({
-  data,
-}: {
-  data: BookingData;
-}) {
-  const [resourceId, setResourceId] = useState(
-    data.resources[0]?.id ?? ""
-  );
-  const [selectedDate, setSelectedDate] = useState("2025-05-15");
+export function BookingWorkspace({ data }: { data: BookingData }) {
+  const [resourceId, setResourceId] = useState(data.resources[0]?.id ?? "");
+  const [selectedDate, setSelectedDate] = useState(data.defaultDate);
   const [bookings, setBookings] = useState(data.bookings);
   const [formOpen, setFormOpen] = useState(false);
 
-  const selectedResource = data.resources.find(
-    (resource) => resource.id === resourceId
-  );
+  const selectedResource = data.resources.find((resource) => resource.id === resourceId);
 
-  function saveBooking(booking: ResourceBooking) {
-    setBookings((current) => [booking, ...current]);
-    setResourceId(booking.resourceId);
-    setSelectedDate(booking.date);
-    setFormOpen(false);
+  async function saveBooking(booking: ResourceBooking) {
+    try {
+      const next = await apiRequest<BookingData>("/api/bookings", {
+        method: "POST",
+        body: JSON.stringify({
+          resourceId: booking.resourceId,
+          title: booking.title,
+          date: booking.date,
+          startTime: booking.startTime,
+          endTime: booking.endTime,
+          notes: booking.notes,
+        }),
+      });
+      setBookings(next.bookings);
+      setResourceId(booking.resourceId);
+      setSelectedDate(booking.date);
+      setFormOpen(false);
+    } catch (error) {
+      window.alert(
+        error instanceof Error ? error.message : "Booking could not be created.",
+      );
+    }
   }
 
   return (
@@ -60,10 +67,7 @@ export function BookingWorkspace({
             onChange={setResourceId}
           />
 
-          <MiniCalendar
-            selectedDate={selectedDate}
-            onChange={setSelectedDate}
-          />
+          <MiniCalendar selectedDate={selectedDate} onChange={setSelectedDate} />
 
           {selectedResource && (
             <div className="booking-resource-summary">
