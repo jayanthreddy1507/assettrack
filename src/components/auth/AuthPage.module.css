@@ -1,0 +1,105 @@
+.authPage {
+  position: relative;
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 32px 0;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 12% 12%, rgba(153, 205, 216, 0.72), transparent 28%),
+    radial-gradient(circle at 88% 82%, rgba(243, 195, 178, 0.68), transparent 32%),
+    var(--color-background);
+}
+
+.authShell {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(360px, var(--auth-card-width));
+  align-items: stretch;
+  gap: clamp(28px, 6vw, 80px);
+}
+
+.brandPanel {
+  position: relative;
+  min-height: 640px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: clamp(28px, 5vw, 64px);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  background: var(--color-primary);
+  color: var(--color-white);
+  box-shadow: var(--shadow-card);
+}
+
+.brandPanel :global(.paragraph),
+.brandPanel :global(.paragraph-small) {
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.decorOne,
+.decorTwo {
+  position: absolute;
+  border-radius: var(--radius-pill);
+  filter: blur(2px);
+}
+
+.decorOne {
+  width: 280px;
+  height: 280px;
+  top: -120px;
+  right: -90px;
+  background: var(--color-accent);
+  opacity: 0.72;
+}
+
+.decorTwo {
+  width: 220px;
+  height: 220px;
+  bottom: -90px;
+  left: -70px;
+  background: var(--color-accent-soft);
+  opacity: 0.62;
+}
+
+.featureCard {
+  position: relative;
+  z-index: 1;
+  max-width: 500px;
+  padding: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.09);
+  backdrop-filter: blur(12px);
+}
+
+.featureCard p + p {
+  margin-top: 8px;
+}
+
+@media (max-width: 900px) {
+  .authShell {
+    grid-template-columns: 1fr;
+    max-width: 560px;
+  }
+
+  .brandPanel {
+    min-height: 340px;
+  }
+}
+
+@media (max-width: 520px) {
+  .authPage {
+    padding: 16px 0;
+  }
+
+  .authShell {
+    width: min(100% - 20px, var(--page-max-width));
+    gap: 18px;
+  }
+
+  .brandPanel {
+    min-height: 300px;
+    padding: 24px;
+  }
+}
