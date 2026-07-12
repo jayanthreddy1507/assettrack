@@ -1,4 +1,4 @@
-# assettrack — Backend
+# AssetFlow — Backend
 
 Enterprise asset and resource management. FastAPI + PostgreSQL.
 
@@ -12,12 +12,12 @@ You need Python 3.11+ and PostgreSQL 14+ installed.
 
 ```bash
 # macOS / Linux
-createdb assettrack
-psql assettrack -c "CREATE USER assettrack WITH PASSWORD 'assettrack' SUPERUSER;"
+createdb assetflow
+psql assetflow -c "CREATE USER assetflow WITH PASSWORD 'assetflow' SUPERUSER;"
 
 # Windows (from the SQL Shell / psql prompt)
-CREATE DATABASE assettrack;
-CREATE USER assettrack WITH PASSWORD 'assettrack' SUPERUSER;
+CREATE DATABASE assetflow;
+CREATE USER assetflow WITH PASSWORD 'assetflow' SUPERUSER;
 ```
 
 The `SUPERUSER` grant is only so the app can run `CREATE EXTENSION btree_gist`
@@ -66,15 +66,15 @@ demo-ready.
 
 ## 2. Logins
 
-All passwords: `assettrack2026`
+All passwords: `Assetflow2026`
 
-| Role          | Email                 | Why they matter in the demo         |
-| ------------- | --------------------- | ----------------------------------- |
-| Admin         | admin@assettrack.io   | Owns org setup, roles, audit cycles |
-| Asset Manager | manager@assettrack.io | Allocates, approves maintenance     |
-| Dept Head     | head@assettrack.io    | Holds the 09:00 booking on Room B2  |
-| Employee      | priya@assettrack.io   | **Holds AF-0114**                   |
-| Employee      | raj@assettrack.io     | **Try to give him AF-0114**         |
+| Role          | Email                | Why they matter in the demo         |
+| ------------- | -------------------- | ----------------------------------- |
+| Admin         | admin@assetflow.io   | Owns org setup, roles, audit cycles |
+| Asset Manager | manager@assetflow.io | Allocates, approves maintenance     |
+| Dept Head     | head@assetflow.io    | Holds the 09:00 booking on Room B2  |
+| Employee      | priya@assetflow.io   | **Holds AF-0114**                   |
+| Employee      | raj@assetflow.io     | **Try to give him AF-0114**         |
 
 ---
 
@@ -103,8 +103,8 @@ comparison logic.
 Verify them yourself:
 
 ```bash
-psql assettrack -c "\d bookings"
-psql assettrack -c "\d allocations"
+psql assetflow -c "\d bookings"
+psql assetflow -c "\d allocations"
 ```
 
 ---
@@ -326,8 +326,9 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO assettrack_u
 
 ### 5. Run migrations
 
-````bash
-n```
+```bash
+npx prisma migrate dev
+```
 
 This creates all tables in your local database.
 
@@ -335,7 +336,7 @@ This creates all tables in your local database.
 
 ```bash
 npm run db:seed
-````
+```
 
 This populates the database with:
 

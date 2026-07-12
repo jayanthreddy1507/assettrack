@@ -18,15 +18,18 @@ export type DashboardIconName =
   | "tool"
   | "arrowUp"
   | "arrowDown"
-  | "menu"
-  | "logout";
+  | "menu";
 
 export interface DashboardIconProps extends SVGProps<SVGSVGElement> {
   name: DashboardIconName;
   size?: number;
 }
 
-export function DashboardIcon({ name, size = 18, ...props }: DashboardIconProps) {
+export function DashboardIcon({
+  name,
+  size = 18,
+  ...props
+}: DashboardIconProps) {
   const shared = {
     width: size,
     height: size,
@@ -132,13 +135,6 @@ export function DashboardIcon({ name, size = 18, ...props }: DashboardIconProps)
     menu: (
       <>
         <path d="M4 7h16M4 12h16M4 17h16" />
-      </>
-    ),
-    logout: (
-      <>
-        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-        <polyline points="16 17 21 12 16 7" />
-        <line x1="21" y1="12" x2="9" y2="12" />
       </>
     ),
   };
