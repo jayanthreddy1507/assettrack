@@ -1,519 +1,848 @@
-# AssetFlow — Backend
+# AssetFlow
 
-Enterprise asset and resource management. FastAPI + PostgreSQL.
+Enterprise asset, booking, maintenance, audit, and reporting platform built for the Odoo Hackathon.
 
----
-
-## 1. Setup (10 minutes, start to finish)
-
-You need Python 3.11+ and PostgreSQL 14+ installed.
-
-### Step 1 — Create the database
-
-```bash
-# macOS / Linux
-createdb assetflow
-psql assetflow -c "CREATE USER assetflow WITH PASSWORD 'assetflow' SUPERUSER;"
-
-# Windows (from the SQL Shell / psql prompt)
-CREATE DATABASE assetflow;
-CREATE USER assetflow WITH PASSWORD 'assetflow' SUPERUSER;
-```
-
-The `SUPERUSER` grant is only so the app can run `CREATE EXTENSION btree_gist`
-on first boot. In production you would create the extension once, by hand, and
-drop the grant.
-
-### Step 2 — Install the backend
-
-```bash
-cd backend
-python -m venv venv
-
-source venv/bin/activate      # macOS / Linux
-venv\Scripts\activate         # Windows
-
-pip install -r requirements.txt
-```
-
-### Step 3 — Configure
-
-```bash
-cp .env.example .env          # Windows: copy .env.example .env
-```
-
-Open `.env` and set `JWT_SECRET` to any long random string.
-
-### Step 4 — Seed and run
-
-```bash
-python seed.py                # creates tables, applies the hard rules, loads demo data
-uvicorn app.main:app --reload
-```
-
-Open **http://localhost:8000/docs** — every endpoint, live, with a Try It button.
-
-### Step 5 — Prove it works
-
-```bash
-python judge_test.py
-```
-
-29 checks, run against the real database. If they all pass, the backend is
-demo-ready.
+AssetFlow helps organizations track physical assets from registration to retirement. It replaces spreadsheet-based asset operations with a role-aware web application backed by PostgreSQL, Prisma, Auth.js, and a production-ready Next.js 15 architecture.
 
 ---
 
-## 2. Logins
+## At a Glance
 
-All passwords: `Assetflow2026`
-
-| Role          | Email                | Why they matter in the demo         |
-| ------------- | -------------------- | ----------------------------------- |
-| Admin         | admin@assetflow.io   | Owns org setup, roles, audit cycles |
-| Asset Manager | manager@assetflow.io | Allocates, approves maintenance     |
-| Dept Head     | head@assetflow.io    | Holds the 09:00 booking on Room B2  |
-| Employee      | priya@assetflow.io   | **Holds AF-0114**                   |
-| Employee      | raj@assetflow.io     | **Try to give him AF-0114**         |
-
----
-
-## 3. The two rules Postgres enforces, not Python
-
-Application-level `if` checks lose races. Two people clicking Confirm in the
-same millisecond both pass the check and both write. These two lines of DDL
-(in `app/db.py`) make that physically impossible:
-
-```sql
-CREATE UNIQUE INDEX one_open_allocation_per_asset
-    ON allocations (asset_id) WHERE returned_at IS NULL;
-
-ALTER TABLE bookings ADD CONSTRAINT no_overlapping_bookings
-EXCLUDE USING gist (
-    asset_id   WITH =,
-    tstzrange(start_ts, end_ts, '[)') WITH &&
-) WHERE (status IN ('UPCOMING', 'ONGOING'));
-```
-
-The `'[)'` bound — inclusive start, exclusive end — is what makes 09:00–10:00
-and 10:00–11:00 legal neighbours while rejecting 09:30–10:30. That is the
-brief's exact example, satisfied by the range type rather than by hand-written
-comparison logic.
-
-Verify them yourself:
-
-```bash
-psql assetflow -c "\d bookings"
-psql assetflow -c "\d allocations"
-```
+| Area           | Details                                                                               |
+| -------------- | ------------------------------------------------------------------------------------- |
+| Project        | AssetFlow                                                                             |
+| Category       | Enterprise asset and resource management                                              |
+| Frontend       | Next.js 15 App Router, React 19, TypeScript, Tailwind CSS, shadcn-style UI components |
+| Backend        | Next.js Route Handlers, server-side services, Prisma repositories                     |
+| Database       | PostgreSQL with Prisma 7                                                              |
+| Authentication | Auth.js, credentials login, OAuth-ready providers, JWT-compatible custom routes       |
+| Quality        | ESLint, Prettier, TypeScript, Husky, lint-staged                                      |
+| Deployment     | Docker and Docker Compose                                                             |
 
 ---
 
-## 4. What makes this different from the other 200 submissions
+## Demo Credentials
 
-### Smart Conflict Resolver
+The seed script creates a default administrator account.
 
-Everyone will block the double allocation. A block is a dead end. Every
-rejection here ships with a way forward:
+| Role        | Email                   | Password     |
+| ----------- | ----------------------- | ------------ |
+| Super Admin | `admin@assetflow.local` | `Admin@1234` |
 
-```
-POST /api/allocations  →  409
-{
-  "reason": "already_allocated",
-  "message": "AF-0114 is currently held by Priya Nair.",
-  "held_by": { "id": 4, "name": "Priya Nair" },
-  "since": "2026-06-12T09:14:00Z",
-  "can_request_transfer": true,
-  "alternatives": [
-    { "tag": "AF-0115", "name": "ThinkPad X1 Carbon", "condition": "Excellent" },
-    { "tag": "AF-0116", "name": "MacBook Air M3",     "condition": "Excellent" }
-  ]
-}
-```
-
-```
-POST /api/bookings  →  409
-{
-  "reason": "overlap",
-  "conflict": { "held_by": "Anjali Menon", "from": "09:00", "to": "10:00" },
-  "next_free_slots": ["08:00", "10:00", "15:00"],
-  "other_resources_free_then": ["Room B3", "Auditorium"]
-}
-```
-
-The UI renders that payload as a dialog with three buttons. The user is never
-stuck.
-
-### Asset Health Score → Retirement Radar
-
-`GET /api/reports/retirement-radar` scores every asset 0–100 from four things
-the database already knows:
-
-| Signal                                     | Weight |
-| ------------------------------------------ | ------ |
-| Age against the category's expected life   | 35     |
-| Maintenance requests in the last 12 months | 30     |
-| Last recorded condition                    | 20     |
-| Days idle since last use                   | 15     |
-
-Nothing is modelled, inferred or guessed — every point lost traces to a row, and
-the API returns the sentences, so the UI explains _why_:
-
-```
-Epson EB-2250U Projector — 3/100 · RETIRE
-  · 6.0 yrs old against a 4-yr expected life
-  · 3 repairs raised in the last 12 months
-  · last recorded condition: Poor
-  · never allocated or booked
-```
-
-That single endpoint answers two lines of the brief at once: "assets nearing
-retirement" and "most-used vs idle assets".
-
-### It moves on its own
-
-`app/main.py` runs a 30-second ticker. Bookings roll `UPCOMING → ONGOING →
-COMPLETED` by themselves, reminders fire 15 minutes before a slot, and overdue
-allocations raise alerts with nobody pressing refresh. The brief asks for real,
-dynamic data rather than static JSON — this is what makes that literally true.
-Leave the dashboard open during judging and it changes while they watch.
-
-### QR labels
-
-`GET /api/assets/{id}/qr` returns a printable PNG. Stick it on the laptop; an
-auditor walking the floor scans instead of typing a tag.
+The password can be changed before seeding with `SEED_ADMIN_PASSWORD` in `.env`.
 
 ---
 
-## 5. API map
+## Problem Statement
 
-| Screen in the brief      | Endpoints                                                                                               |
-| ------------------------ | ------------------------------------------------------------------------------------------------------- |
-| Login / Signup           | `POST /api/auth/signup` · `/login` · `GET /me`                                                          |
-| Organization Setup       | `/api/org/departments` · `/categories` · `/employees` · `PATCH /employees/{id}/role`                    |
-| Asset Registration       | `POST /api/assets` · `GET /api/assets?q=&status=&category_id=` · `/{id}` · `/{id}/qr` · `/by-tag/{tag}` |
-| Allocation & Transfer    | `POST /api/allocations` · `/{id}/return` · `/overdue` · `/transfers` · `/transfers/{id}/decide`         |
-| Resource Booking         | `POST /api/bookings` · `GET /availability/{id}` · `/{id}/cancel` · `/{id}/reschedule`                   |
-| Maintenance              | `POST /api/maintenance` · `/{id}/decide` · `/{id}/advance`                                              |
-| Audit                    | `POST /api/audits/cycles` · `/items/{id}/mark` · `/cycles/{id}/discrepancies` · `/cycles/{id}/close`    |
-| Dashboard                | `GET /api/dashboard`                                                                                    |
-| Reports                  | `/api/reports/retirement-radar` · `/utilization` · `/booking-heatmap` · `/export/{report}`              |
-| Activity & Notifications | `GET /api/activity` · `/api/notifications`                                                              |
+Organizations often lose time and money because asset data is scattered across spreadsheets, emails, and manual approval chains. Common issues include duplicate asset allocation, unclear ownership, poor maintenance visibility, booking conflicts, and missing audit trails.
 
----
+AssetFlow solves this by creating one operational system for:
 
-## 6. Where every rule lives
-
-Judges ask "show me where you enforce X". Have these ready:
-
-| Rule                                 | File                                                                           |
-| ------------------------------------ | ------------------------------------------------------------------------------ |
-| Signup can never mint an admin       | `routers/auth.py` — `SignupIn` has **no role field**                           |
-| Only an admin changes roles          | `routers/org.py` — `change_role`, the only place `.role =` is written          |
-| Double allocation blocked            | `db.py` (index) + `routers/allocations.py` (friendly 409)                      |
-| Overlapping booking rejected         | `db.py` (EXCLUDE) + `routers/bookings.py`                                      |
-| Approval precedes maintenance status | `routers/maintenance.py` — the asset moves in `decide`, not in `raise_request` |
-| No illegal workflow jumps            | `routers/maintenance.py` — the `NEXT` state map                                |
-| Everything is audited                | `services.py` — `log()`, called on every mutation                              |
+- Asset registration and lifecycle tracking
+- Employee, department, and category management
+- Asset allocation and return workflows
+- Resource booking and availability planning
+- Maintenance request tracking
+- Audit cycle management
+- Notifications and operational reporting
+- Role-based access control
 
 ---
 
-## 7. Demo script (4 minutes)
+## Solution Overview
 
-1. Log in as **manager**. Dashboard shows an overdue return and a pending repair — it is already alive.
-2. Try to allocate **AF-0114** to Raj. Rejected — _"held by Priya Nair"_ — with two spare laptops offered and a Transfer button. Click Transfer. Approve it. Watch the history write itself.
-3. Book **Room B2**, 09:30–10:30 tomorrow. Rejected, with the next free windows and two other free rooms. Take 10:00–11:00 instead. Accepted.
-4. Raise a repair on the van. Note the asset does _not_ change status. Approve it. _Now_ it does.
-5. Open **Reports → Retirement Radar**. The six-year-old projector scores 3/100 and says exactly why.
-6. Show `/docs`. Show `\d bookings`. The rules are in the database, not in an if-statement.
+```text
++----------------+
+| User logs in   |
++-------+--------+
+        |
+        v
++-------------------------+
+| Role and permission     |
+| checks                  |
++-----------+-------------+
+            |
+            v
++-------------------------+
+| Dashboard overview      |
++-----------+-------------+
+            |
+            +--------------------+--------------------+--------------------+
+            |                    |                    |                    |
+            v                    v                    v                    v
+   +----------------+   +----------------+   +----------------+   +----------------+
+   | Asset registry |   | Organization   |   | Allocation     |   | Booking        |
+   +-------+--------+   +-------+--------+   +-------+--------+   +-------+--------+
+           |                    |                    |                    |
+           v                    v                    v                    v
+   +----------------+   +----------------+   +----------------+   +----------------+
+   | Assets API     |   | Org APIs       |   | Allocation API |   | Booking API    |
+   +-------+--------+   +-------+--------+   +-------+--------+   +-------+--------+
+           |                    |                    |                    |
+           +--------------------+---------+----------+--------------------+
+                                      |
+                                      v
+                              +---------------+
+                              | PostgreSQL    |
+                              +-------+-------+
+                                      |
+                                      v
+                              +---------------+
+                              | Notifications |
+                              | Activity log  |
+                              +-------+-------+
+                                      |
+                                      v
+                              +---------------+
+                              | Dashboard     |
+                              +---------------+
 
----
-
-## 8. Git protocol (the rule that disqualifies teams)
-
-The brief says it plainly: **every member must commit.** One person managing the
-repo is called out as insufficient.
-
-```bash
-git checkout -b feat/booking-calendar
-# ... work ...
-git commit -m "Add booking calendar with conflict dialog"
-git push -u origin feat/booking-calendar
+Additional dashboard modules follow the same API-backed path:
+Maintenance -> Maintenance API -> PostgreSQL
+Audit       -> Audit API       -> PostgreSQL
+Reports     -> Reporting API   -> PostgreSQL
 ```
 
-Open a PR. Have a teammate merge it. Do this from the first hour — a repo with
-40 commits from one account and 2 from everyone else is a visible fail, and it
-cannot be repaired at 4pm.
-
-# assettrack — Enterprise Asset & Resource Management System
-
-A modern ERP system for tracking company assets, maintenance, bookings, and audits.
-
-**Stack:** Next.js 15 · PostgreSQL · Prisma 7 · Auth.js · TailwindCSS · shadcn/ui
+AssetFlow keeps the user experience in the Next.js app while placing business rules behind API routes and server-side repositories. Prisma owns database access, PostgreSQL stores normalized operational data, and Zod protects request boundaries.
 
 ---
 
-## Prerequisites
+## Core Features
 
-Make sure these are installed on your machine before starting:
+### Dashboard
 
-| Tool       | Version | Install                                                |
-| ---------- | ------- | ------------------------------------------------------ |
-| Node.js    | 18+     | [nodejs.org](https://nodejs.org)                       |
-| PostgreSQL | 14+     | [postgresql.org](https://www.postgresql.org/download/) |
-| npm        | 9+      | Comes with Node.js                                     |
+- Overview metrics for assets, bookings, maintenance, and overdue activity
+- Quick actions for common operational tasks
+- Recent activity and overdue return visibility
+
+### Asset Registry
+
+- Register and manage assets
+- Track asset tag, serial number, category, department, status, condition, location, purchase data, vendor, and warranty
+- Soft-delete support through `deletedAt`
+- Filterable asset table and asset details drawer
+
+### Organization Management
+
+- Manage departments
+- Manage categories
+- Manage employees
+- Support department hierarchy and department heads
+
+### Allocation
+
+- Allocate assets to employees
+- Track expected return dates
+- Record return condition and return notes
+- View allocation history and transfer requests
+
+### Bookings
+
+- Book bookable assets and shared resources
+- Track booking status and time windows
+- Calendar-focused workspace for resource planning
+
+### Maintenance
+
+- Raise maintenance requests
+- Track priority, approval, assignment, progress, and resolution
+- Preserve maintenance history per asset
+
+### Audits
+
+- Create audit cycles
+- Assign auditors
+- Track audit item results such as found, missing, damaged, and misplaced
+
+### Notifications
+
+- Display system notifications for allocation, returns, maintenance, booking, transfer, audit, and system events
+
+### Reports
+
+- Utilization and operational report views
+- Booking heatmap and chart components
+- Reporting workspace prepared for deeper analytics
 
 ---
 
-## Quick Start (New Collaborator)
+## Architecture
 
-Follow these steps exactly, in order:
+```text
++----------------------------------------------------------------------------------+
+| Browser                                                                          |
++--------------------------------------+-------------------------------------------+
+                                       |
+                                       v
++----------------------------------------------------------------------------------+
+| Next.js 15 App Router                                                            |
+| src/app                                                                          |
++----------------------+--------------------------+--------------------------------+
+                       |                          |
+                       v                          v
++-----------------------------------+   +------------------------------------------+
+| Frontend Layer                    |   | Backend Layer                            |
+|                                   |   |                                          |
+| - Route pages                     |   | - Route handlers in src/app/api          |
+| - Feature components              |   | - Auth.js and custom auth routes         |
+| - Reusable UI components          |   | - Role and permission guards             |
+| - React Hook Form                 |   | - Zod request validation                 |
+| - TanStack Query                  |   | - Standard API responses and errors      |
++----------------------+------------+   +----------------------+-------------------+
+                       |                                   |
+                       | HTTP / fetch                      |
+                       +---------------------------------->|
+                                                           v
+                                      +--------------------------------------------+
+                                      | Data Access Layer                          |
+                                      |                                            |
+                                      | - Repository modules                       |
+                                      | - Generated Prisma Client                  |
+                                      | - Prisma migrations                        |
+                                      | - Seed data                                |
+                                      +---------------------+----------------------+
+                                                            |
+                                                            v
+                                      +--------------------------------------------+
+                                      | Infrastructure                             |
+                                      |                                            |
+                                      | - PostgreSQL                               |
+                                      | - Docker / Docker Compose                  |
+                                      | - Pino logging                             |
+                                      +--------------------------------------------+
+```
 
-### 1. Clone the repository
+### Frontend
+
+The frontend uses the Next.js App Router with TypeScript and reusable feature components under `src/components`. Pages live in `src/app`, while domain-specific components are grouped by feature: assets, allocation, booking, maintenance, audits, organization, reports, notifications, auth, and dashboard.
+
+### Backend
+
+The backend is implemented through Next.js Route Handlers under `src/app/api`. Server-only auth and permission utilities live under `src/server`. Repository files under `src/repositories` isolate database access from route handling.
+
+### Database
+
+PostgreSQL is the source of truth. Prisma defines models, enums, relations, and migrations in `prisma/schema.prisma` and `prisma/migrations`.
+
+### Authentication
+
+Auth.js is configured in `src/auth.ts` with Prisma adapter support. The app also includes custom login, logout, register, and current-user API routes for credentials-based flows.
+
+### Validation
+
+Zod schemas live under `src/schemas`. API handlers and forms use these schemas to keep frontend and backend validation consistent.
+
+---
+
+## Tech Stack
+
+| Layer         | Technology                                      |
+| ------------- | ----------------------------------------------- |
+| Framework     | Next.js 15                                      |
+| Language      | TypeScript                                      |
+| UI            | React 19, Tailwind CSS, shadcn-style components |
+| Forms         | React Hook Form                                 |
+| Validation    | Zod                                             |
+| Data Fetching | TanStack Query                                  |
+| ORM           | Prisma 7                                        |
+| Database      | PostgreSQL                                      |
+| Auth          | Auth.js / next-auth v5 beta                     |
+| Logging       | Pino                                            |
+| Tooling       | ESLint, Prettier, Husky, lint-staged            |
+| Runtime       | Node.js                                         |
+| Containers    | Docker, Docker Compose                          |
+
+---
+
+## Repository Structure
+
+```text
+assettrack/
+|-- .github/
+|   `-- workflows/
+|-- .husky/
+|-- .vscode/
+|-- prisma/
+|   |-- migrations/
+|   |-- schema.prisma
+|   `-- seed.ts
+|-- public/
+|-- src/
+|   |-- app/
+|   |   |-- api/
+|   |   |-- assets/
+|   |   |-- allocation/
+|   |   |-- audits/
+|   |   |-- auth/
+|   |   |-- bookings/
+|   |   |-- dashboard/
+|   |   |-- maintenance/
+|   |   |-- notifications/
+|   |   |-- organization/
+|   |   |-- reports/
+|   |   |-- globals.css
+|   |   `-- layout.tsx
+|   |-- components/
+|   |   |-- assets/
+|   |   |-- allocation/
+|   |   |-- audit/
+|   |   |-- auth/
+|   |   |-- booking/
+|   |   |-- dashboard/
+|   |   |-- layout/
+|   |   |-- maintenance/
+|   |   |-- notifications/
+|   |   |-- organization/
+|   |   |-- reports/
+|   |   `-- ui/
+|   |-- config/
+|   |-- constants/
+|   |-- lib/
+|   |-- providers/
+|   |-- repositories/
+|   |-- schemas/
+|   |-- server/
+|   |-- types/
+|   `-- utils/
+|-- Dockerfile
+|-- docker-compose.yml
+|-- next.config.mjs
+|-- package.json
+|-- prisma.config.ts
+|-- tailwind.config.ts
+`-- tsconfig.json
+```
+
+---
+
+## Database Model
+
+```text
++------------------+          +------------------+          +------------------+
+| users            | 1      0..1 employees       | many   1 | departments      |
+|------------------|----------|------------------|----------|------------------|
+| id PK            |          | id PK            |          | id PK            |
+| email UK         |          | employee_code UK |          | name UK          |
+| password         |          | user_id FK       |          | code UK          |
+| role             |          | department_id FK |          | parent_id FK     |
+| is_active        |          | manager_id FK    |          | head_id FK       |
++--------+---------+          +---+----------+---+          +--------+---------+
+         |                        |          |                       |
+         |                        |          |                       |
+         | 1                      |          |                       | 1
+         v many                   |          |                       v many
++------------------+              |          |              +------------------+
+| accounts         |              |          |              | assets           |
+| sessions         |              |          |              |------------------|
++------------------+              |          |              | id PK            |
+                                  |          |              | asset_tag UK     |
+                                  |          |              | category_id FK   |
+                                  |          |              | department_id FK |
+                                  |          |              | status           |
+                                  |          |              | condition        |
+                                  |          |              +---+---+---+---+--+
+                                  |          |                  |   |   |   |
+                                  |          |                  |   |   |   |
+                                  |          |                  |   |   |   |
+                                  |          |                  |   |   |   |
+                                  |          |                  v   v   v   v
+                                  |          |       +----------------+ +----------------+
+                                  |          |       | allocations    | | bookings       |
+                                  |          |       | asset_id FK    | | asset_id FK    |
+                                  |          |       | employee_id FK | | employee_id FK |
+                                  |          |       | status         | | status         |
+                                  |          |       +----------------+ +----------------+
+                                  |          |
+                                  |          |       +----------------------+ +----------------+
+                                  |          +------>| transfer_requests    | | maintenance    |
+                                  |                  | asset_id FK          | | requests       |
+                                  |                  | from_employee_id FK  | | asset_id FK    |
+                                  |                  | to_employee_id FK    | | reported_by FK |
+                                  |                  | status               | | status         |
+                                  |                  +----------------------+ +-------+--------+
+                                  |                                                   |
+                                  |                                                   v
+                                  |                                          +------------------+
+                                  |                                          | maintenance      |
+                                  |                                          | updates          |
+                                  |                                          | request_id FK    |
+                                  |                                          +------------------+
+                                  |
+                                  v
+                         +------------------+
+                         | notifications    |
+                         | employee_id FK   |
+                         | type             |
+                         | is_read          |
+                         +------------------+
+
++------------------+          +------------------+          +------------------+
+| categories       | 1      many assets          | 1      many activity_logs    |
+|------------------|---------- above -----------|----------|------------------|
+| id PK            |                                | id PK            |
+| name UK          |                                | user_id FK       |
+| parent_id FK     |                                | asset_id FK      |
++------------------+                                | module/action    |
+                                                    +------------------+
+
++------------------+          +------------------+          +------------------+
+| audit_cycles     | 1      many audit_items     | many   1 | assets           |
+|------------------|----------|------------------|----------|------------------|
+| id PK            |          | id PK            |          | id PK            |
+| title            |          | cycle_id FK      |          | asset_tag UK     |
+| start_date       |          | asset_id FK      |          +------------------+
+| end_date         |          | auditor_id FK    |
+| status           |          | result           |
++--------+---------+          +------------------+
+         |
+         | 1
+         v many
++------------------+          +------------------+
+| audit_assignments| many   1 | employees        |
+| cycle_id FK      |----------| id PK            |
+| auditor_id FK    |          +------------------+
++------------------+
+```
+
+Important domain tables:
+
+| Table                  | Purpose                                 |
+| ---------------------- | --------------------------------------- |
+| `users`                | Authentication identity and global role |
+| `employees`            | Organization employee profile           |
+| `departments`          | Department structure and ownership      |
+| `categories`           | Asset classification                    |
+| `assets`               | Asset registry and lifecycle state      |
+| `asset_allocations`    | Active and historical asset assignments |
+| `resource_bookings`    | Bookable resource reservations          |
+| `maintenance_requests` | Maintenance workflow state              |
+| `maintenance_updates`  | Timeline updates for maintenance work   |
+| `transfer_requests`    | Asset transfer approval workflow        |
+| `audit_cycles`         | Audit campaign header                   |
+| `audit_assignments`    | Auditor assignment per cycle            |
+| `audit_items`          | Per-asset audit results                 |
+| `notifications`        | Employee-facing notifications           |
+| `activity_logs`        | Operational audit trail                 |
+| `accounts`             | Auth.js OAuth account records           |
+| `sessions`             | Auth.js session records                 |
+
+---
+
+## API Surface
+
+Current API routes include:
+
+| Area        | Route                     |
+| ----------- | ------------------------- |
+| Health      | `GET /api/health`         |
+| Auth        | `POST /api/auth/login`    |
+| Auth        | `POST /api/auth/logout`   |
+| Auth        | `GET /api/auth/me`        |
+| Auth        | `POST /api/auth/register` |
+| Auth.js     | `/api/auth/[...nextauth]` |
+| Assets      | `GET /api/assets`         |
+| Assets      | `POST /api/assets`        |
+| Assets      | `GET /api/assets/:id`     |
+| Assets      | `PATCH /api/assets/:id`   |
+| Assets      | `DELETE /api/assets/:id`  |
+| Departments | `GET /api/departments`    |
+| Departments | `POST /api/departments`   |
+| Categories  | `GET /api/categories`     |
+| Categories  | `POST /api/categories`    |
+| Employees   | `GET /api/employees`      |
+| Employees   | `POST /api/employees`     |
+
+Additional feature workspaces are already structured for allocation, booking, maintenance, audits, reports, and notifications.
+
+---
+
+## Getting Started
+
+### 1. Clone the Repository
 
 ```bash
 git clone <repo-url>
-cd AssetTrack
+cd assettrack
 ```
 
-### 2. Install dependencies
+### 2. Install Dependencies
 
 ```bash
 npm install
 ```
 
-> This also auto-runs `prisma generate` (via the `postinstall` script) to regenerate the Prisma Client.
+This installs the application dependencies and runs `prisma generate` through the `postinstall` script.
 
-### 3. Set up your environment file
+### 3. Configure Environment Variables
 
 ```bash
-# Windows
 copy .env.example .env
+```
 
-# Mac / Linux
+For macOS or Linux:
+
+```bash
 cp .env.example .env
 ```
 
-Then open `.env` and fill in your local PostgreSQL credentials:
+Update `.env` with your local secrets and database connection.
+
+Minimum required values:
 
 ```env
-DATABASE_URL="postgresql://assettrack_user:your_password@localhost:5432/assettrack?schema=public"
+DATABASE_URL="postgresql://assetflow_user:assetflow_password@localhost:5432/assetflow?schema=public"
+AUTH_SECRET="replace-with-a-strong-base64-secret"
+JWT_SECRET="replace-with-a-strong-base64-secret"
+APP_URL="http://localhost:3000"
+NEXT_PUBLIC_APP_URL="http://localhost:3000"
 ```
 
-### 4. Create the local database
-
-Connect to PostgreSQL and run:
-
-```sql
--- Create the database
-CREATE DATABASE assettrack;
-
--- Create the app user
-CREATE USER assettrack_user WITH PASSWORD 'your_password';
-
--- Grant permissions
-GRANT ALL PRIVILEGES ON DATABASE assettrack TO assettrack_user;
-ALTER USER assettrack_user CREATEDB;
-
--- Connect and grant schema access
-\c assettrack
-GRANT ALL ON SCHEMA public TO assettrack_user;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO assettrack_user;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO assettrack_user;
-```
-
-> On Windows, open `psql` from: `C:\Program Files\PostgreSQL\17\bin\psql.exe -U postgres`
-
-### 5. Run migrations
+Generate secure secrets with:
 
 ```bash
-npx prisma migrate dev
+openssl rand -base64 32
 ```
 
-This creates all tables in your local database.
+### 4. Start PostgreSQL with Docker
 
-### 6. Seed the database
+```bash
+docker compose up -d postgres
+```
+
+This starts a PostgreSQL 17 container using the credentials from `.env`.
+
+### 5. Run Migrations
+
+```bash
+npm run db:migrate:dev
+```
+
+This applies the Prisma migration history and creates the local database schema.
+
+### 6. Seed Demo Data
 
 ```bash
 npm run db:seed
 ```
 
-This populates the database with:
+The seed creates departments, categories, an admin user, and starter assets.
 
-- 5 default departments (IT, HR, Finance, Operations, Facilities)
-- 8 asset categories (Electronics, Furniture, Vehicles, etc.)
-- 1 admin user
-- 3 demo assets
-
-**Default login:**
-
-```
-Email:    admin@assettrack.com
-Password: Admin@1234
-```
-
-### 7. Start the development server
+### 7. Start the App
 
 ```bash
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000)
+Open [http://localhost:3000](http://localhost:3000).
 
 ---
 
-## Database Commands
+## Docker Setup
 
-| Command                  | What it does                                             |
-| ------------------------ | -------------------------------------------------------- |
-| `npm run db:migrate:dev` | Create and apply a new migration (development)           |
-| `npm run db:migrate`     | Apply pending migrations (production/staging)            |
-| `npm run db:generate`    | Regenerate Prisma Client after schema changes            |
-| `npm run db:seed`        | Seed the database with default data                      |
-| `npm run db:studio`      | Open Prisma Studio (visual DB browser at localhost:5555) |
-| `npm run db:reset`       | ⚠️ Drop + re-migrate + re-seed (dev only, destroys data) |
-
----
-
-## Project Structure
-
-```
-AssetTrack/
-├── prisma/
-│   ├── schema.prisma       ← Database schema (models, enums, relations)
-│   ├── seed.js             ← Shared seed data (committed to git)
-│   └── migrations/         ← Migration history (committed to git)
-│
-├── prisma.config.ts        ← Prisma 7 config (datasource URL, seed command)
-│
-├── src/
-│   ├── app/                ← Next.js App Router pages and API routes
-│   ├── lib/
-│   │   └── prisma.js       ← Prisma Client singleton (import this everywhere)
-│   └── generated/
-│       └── prisma/         ← Auto-generated types (do not edit, gitignored)
-│
-├── .env                    ← Local secrets (gitignored — never commit this)
-├── .env.example            ← Template for new collaborators (committed to git)
-└── README.md
-```
-
----
-
-## How Collaborators Stay in Sync
-
-The database state is shared through three committed files:
-
-| File                   | Purpose                                             |
-| ---------------------- | --------------------------------------------------- |
-| `prisma/schema.prisma` | Defines all tables, columns, and relationships      |
-| `prisma/migrations/`   | Full SQL history of every database change           |
-| `prisma/seed.js`       | Default data every developer's database should have |
-
-**When a teammate changes the schema and pushes:**
+Run the complete stack:
 
 ```bash
-git pull
-npx prisma migrate dev   # applies the new migration to your local DB
+docker compose up --build
 ```
 
-**Full reset (if your DB is out of sync):**
+Services:
+
+| Service    | Description                                     |
+| ---------- | ----------------------------------------------- |
+| `postgres` | PostgreSQL database                             |
+| `migrate`  | Applies Prisma migrations before the app starts |
+| `app`      | Production Next.js container                    |
+
+Local URLs:
+
+| Service    | URL                                            |
+| ---------- | ---------------------------------------------- |
+| Web App    | [http://localhost:3000](http://localhost:3000) |
+| PostgreSQL | `localhost:5432`                               |
+
+---
+
+## Package Scripts
+
+| Script                   | Purpose                                                          |
+| ------------------------ | ---------------------------------------------------------------- |
+| `npm run dev`            | Start Next.js with Turbopack                                     |
+| `npm run build`          | Build the production app                                         |
+| `npm run start`          | Start the production server                                      |
+| `npm run lint`           | Run ESLint                                                       |
+| `npm run lint:fix`       | Fix ESLint issues where possible                                 |
+| `npm run format`         | Format files with Prettier                                       |
+| `npm run format:check`   | Check formatting without writing changes                         |
+| `npm run typecheck`      | Run TypeScript type checking                                     |
+| `npm run validate`       | Generate Prisma client, lint, typecheck, format-check, and build |
+| `npm run db:migrate`     | Apply migrations in production or CI                             |
+| `npm run db:migrate:dev` | Create/apply development migrations                              |
+| `npm run db:generate`    | Generate Prisma client                                           |
+| `npm run db:push`        | Push schema directly without creating a migration                |
+| `npm run db:seed`        | Seed default data                                                |
+| `npm run db:studio`      | Open Prisma Studio                                               |
+| `npm run db:reset`       | Reset database, rerun migrations, and seed                       |
+
+---
+
+## Environment Variables
+
+| Variable                         | Purpose                                         |
+| -------------------------------- | ----------------------------------------------- |
+| `DATABASE_URL`                   | PostgreSQL connection string used by Prisma     |
+| `POSTGRES_DB`                    | Docker PostgreSQL database name                 |
+| `POSTGRES_USER`                  | Docker PostgreSQL username                      |
+| `POSTGRES_PASSWORD`              | Docker PostgreSQL password                      |
+| `APP_NAME`                       | Display/application name                        |
+| `APP_URL`                        | Server-side application URL                     |
+| `NEXT_PUBLIC_APP_URL`            | Browser-visible app URL                         |
+| `NEXT_PUBLIC_API_BASE_URL`       | Optional browser API base URL                   |
+| `AUTH_SECRET`                    | Auth.js signing/encryption secret               |
+| `AUTH_URL`                       | Auth.js base URL                                |
+| `NEXTAUTH_URL`                   | Compatibility URL for next-auth                 |
+| `AUTH_TRUST_HOST`                | Allows Auth.js to trust deployment host headers |
+| `JWT_SECRET`                     | Secret for custom JWT-compatible auth endpoints |
+| `JWT_EXPIRES_IN`                 | Custom JWT expiry duration                      |
+| `AUTH_GOOGLE_ID`                 | Google OAuth client ID                          |
+| `AUTH_GOOGLE_SECRET`             | Google OAuth client secret                      |
+| `AUTH_MICROSOFT_ENTRA_ID_ID`     | Microsoft Entra ID OAuth client ID              |
+| `AUTH_MICROSOFT_ENTRA_ID_SECRET` | Microsoft Entra ID OAuth client secret          |
+| `AUTH_MICROSOFT_ENTRA_ID_ISSUER` | Microsoft Entra ID issuer URL                   |
+| `CORS_ORIGIN`                    | Allowed browser origin                          |
+| `RATE_LIMIT_WINDOW_MS`           | Rate limit window                               |
+| `RATE_LIMIT_MAX_REQUESTS`        | Max requests per rate limit window              |
+| `LOG_LEVEL`                      | Pino log level                                  |
+| `SEED_ADMIN_PASSWORD`            | Default seeded admin password                   |
+
+---
+
+## Hackathon Presentation Flow
+
+Use this structure for a concise demo.
+
+### 1. Opening
+
+AssetFlow is an enterprise asset operations platform. It gives a company one place to register assets, allocate them, book shared resources, handle maintenance, run audits, and produce operational reports.
+
+### 2. Problem
+
+Manual asset tracking fails when teams grow. Ownership becomes unclear, duplicate allocation happens, booking conflicts are missed, and maintenance history disappears across spreadsheets.
+
+### 3. Product Walkthrough
+
+1. Log in as the seeded admin.
+2. Open the dashboard and show operational metrics.
+3. Go to assets and show registered assets with status, condition, department, and category.
+4. Create or inspect an asset.
+5. Open organization setup and show departments, categories, and employees.
+6. Show allocation, booking, maintenance, audit, notification, and reports workspaces.
+7. Explain that the backend is backed by PostgreSQL and Prisma, not static UI data.
+
+### 4. Technical Strength
+
+- Production-style Next.js 15 App Router structure
+- Typed Prisma schema and migrations
+- Role-aware authentication foundation
+- Reusable UI system
+- Zod validation boundaries
+- Dockerized local stack
+- CI-ready package scripts
+- Enterprise-oriented folder organization
+
+### 5. Closing
+
+AssetFlow is designed to become a real internal tool: it starts as a hackathon project but already has the structure needed for production hardening, integrations, reporting, and deployment.
+
+---
+
+## Demo Talking Points
+
+| Topic                      | What to say                                                                                     |
+| -------------------------- | ----------------------------------------------------------------------------------------------- |
+| Why it matters             | Asset loss, booking conflicts, and maintenance delays are expensive operational problems        |
+| Why this solution works    | One database-backed workflow replaces disconnected spreadsheets                                 |
+| What is technically strong | Next.js full-stack architecture, Prisma schema, Auth.js foundation, Docker deployment           |
+| What is scalable           | Feature-based frontend, repository-based backend, normalized database                           |
+| What comes next            | Mobile scanning, advanced reporting, approval workflows, object storage, queues, and monitoring |
+
+---
+
+## Quality and Engineering
+
+The repository includes the following production practices:
+
+- TypeScript for static safety
+- ESLint for code correctness
+- Prettier for consistent formatting
+- Husky and lint-staged for pre-commit checks
+- Prisma migrations for database change history
+- Seed script for reproducible demo setup
+- Docker Compose for local infrastructure
+- Environment variable template for onboarding
+- Central API response and error utilities
+- Server-side auth and permission helpers
+- Repository modules for database access
+
+Run the full validation pipeline:
 
 ```bash
-npm run db:reset   # drops everything, re-migrates, re-seeds
+npm run validate
 ```
 
 ---
 
-## Database Schema
+## Security Notes
 
-### Tables
+AssetFlow is structured around common enterprise security requirements:
 
-| Table                 | Description                                                       |
-| --------------------- | ----------------------------------------------------------------- |
-| `users`               | All system users with roles and department assignments            |
-| `departments`         | Organizational structure, supports hierarchy (parent/child)       |
-| `categories`          | Asset categories, supports hierarchy (e.g. Electronics > Laptops) |
-| `assets`              | All tracked assets with status, location, and JSONB metadata      |
-| `accounts`            | Auth.js OAuth accounts                                            |
-| `sessions`            | Auth.js user sessions                                             |
-| `verification_tokens` | Auth.js email verification                                        |
+- Secrets live in `.env` and are not committed
+- Passwords are hashed with bcrypt
+- Auth.js manages session/OAuth integration
+- Server routes can enforce role and permission checks
+- Zod schemas validate request payloads
+- Prisma parameterizes database access and reduces SQL injection risk
+- Soft deletes preserve operational history
+- API errors are normalized before returning to clients
+- Logs are centralized through Pino
 
-### Roles
+Before production deployment:
 
-| Role          | Access                            |
-| ------------- | --------------------------------- |
-| `SUPER_ADMIN` | Full system access                |
-| `ADMIN`       | Manage assets, users, departments |
-| `MANAGER`     | Approve bookings, view reports    |
-| `TECHNICIAN`  | Handle maintenance                |
-| `EMPLOYEE`    | Book assets, view own assignments |
-| `AUDITOR`     | Read-only audit access            |
+- Replace all placeholder secrets
+- Configure OAuth providers
+- Enforce HTTPS
+- Review CORS settings
+- Add rate limiting middleware at the edge or reverse proxy
+- Add database backups
+- Add monitoring and alerting
+- Add audit logging to every mutation route
 
 ---
 
-## Using the Prisma Client in Code
+## Future Roadmap
 
-Import the singleton — never instantiate `PrismaClient` directly in your components or routes:
+| Phase   | Work                                                                |
+| ------- | ------------------------------------------------------------------- |
+| Phase 1 | Complete CRUD and workflows for all modules                         |
+| Phase 2 | Add approval policies and stronger RBAC                             |
+| Phase 3 | Add QR/barcode scanning and asset labels                            |
+| Phase 4 | Add file uploads for invoices, warranty documents, and asset photos |
+| Phase 5 | Add report exports and scheduled reports                            |
+| Phase 6 | Add Redis caching and background workers                            |
+| Phase 7 | Add observability, metrics, tracing, and alerts                     |
+| Phase 8 | Prepare multi-tenant deployment                                     |
 
-```js
-import { prisma } from "@/lib/prisma";
+---
 
-// Fetch all active assets with their category and department
-const assets = await prisma.asset.findMany({
-  where: { deletedAt: null },
-  include: {
-    category: true,
-    department: true,
-    assignedTo: { select: { id: true, name: true, email: true } },
-  },
-  orderBy: { createdAt: "desc" },
-});
+## Deployment Checklist
 
-// Soft delete an asset (never hard delete in an ERP)
-await prisma.asset.update({
-  where: { id: assetId },
-  data: { deletedAt: new Date() },
-});
+- [ ] Set production `DATABASE_URL`
+- [ ] Set strong `AUTH_SECRET`
+- [ ] Set strong `JWT_SECRET`
+- [ ] Configure OAuth credentials if used
+- [ ] Run `npm run validate`
+- [ ] Run `npm run db:migrate`
+- [ ] Confirm seed data is not used as production credentials
+- [ ] Configure HTTPS and trusted host settings
+- [ ] Configure backups
+- [ ] Configure logs and monitoring
 
-// Wrap multi-step operations in a transaction
-const [updatedAsset, log] = await prisma.$transaction([
-  prisma.asset.update({
-    where: { id },
-    data: { status: "ASSIGNED", assignedToId: userId },
-  }),
-  prisma.auditLog.create({
-    data: { assetId: id, action: "ASSIGNED", performedById: currentUser },
-  }),
-]);
+---
+
+## Development Workflow
+
+Recommended implementation order:
+
+```text
+Repository setup
+  -> Database schema and migrations
+  -> Authentication and authorization
+  -> Organization module
+  -> Asset registry
+  -> Allocation workflow
+  -> Booking workflow
+  -> Maintenance workflow
+  -> Audit workflow
+  -> Notifications
+  -> Reports and exports
+  -> Production hardening
 ```
 
 ---
 
-## Making Schema Changes
+## Team Git Workflow
 
-1. Edit `prisma/schema.prisma`
-2. Run `npx prisma migrate dev --name describe_your_change`
-3. Commit both `schema.prisma` and the new `migrations/` folder
-4. Push — teammates run `npx prisma migrate dev` after pulling
+Use feature branches and clear commits.
+
+```bash
+git checkout -b feat/assets-api
+git add .
+git commit -m "Add assets API integration"
+git push -u origin feat/assets-api
+```
+
+Suggested branch naming:
+
+| Prefix      | Use                    |
+| ----------- | ---------------------- |
+| `feat/`     | New feature            |
+| `fix/`      | Bug fix                |
+| `chore/`    | Tooling or maintenance |
+| `docs/`     | Documentation          |
+| `refactor/` | Internal code cleanup  |
+
+Suggested commit format:
+
+```text
+type(scope): short summary
+```
+
+Examples:
+
+```text
+feat(assets): add asset registration form
+fix(auth): handle inactive users during login
+chore(prisma): add maintenance request migration
+```
 
 ---
 
 ## Troubleshooting
 
-**`Can't reach database server`**
+### Prisma Client is stale
 
-- Verify PostgreSQL is running: check Services on Windows or `brew services list` on Mac
-- Double-check `DATABASE_URL` in your `.env`
+```bash
+npm run db:generate
+```
 
-**`permission denied to create database`**
+### Database connection fails
 
-- Run: `ALTER USER assettrack_user CREATEDB;` in psql as postgres superuser
+Check that PostgreSQL is running:
 
-**`relation "X" does not exist`**
+```bash
+docker compose ps
+```
 
-- Run `npx prisma migrate dev` to apply missing migrations
+Then verify `DATABASE_URL` in `.env`.
 
-**Prisma Client out of date after `git pull`**
+### Local database needs a clean reset
 
-- Run `npx prisma generate` (or just `npm install` which triggers `postinstall`)
+```bash
+npm run db:reset
+```
+
+This is destructive and should only be used for local development.
+
+### Build fails after pulling changes
+
+```bash
+npm install
+npm run db:generate
+npm run typecheck
+```
+
+---
+
+## License
+
+This project was built for hackathon demonstration purposes. Add the final license selected by the team before public release.
